@@ -163,9 +163,10 @@ export default function App() {
       currentHgufcFormation,
       currentRivalFormation,
       currentOpponent,
-      matchPlan.swot
+      matchPlan.swot,
+      players
     );
-  }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot]);
+  }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players]);
 
   // Auto-Assign 11 Starting Players to Formation Positions
   const assignStartingXIToFormation = useCallback((formation: Formation) => {

@@ -1,228 +1,357 @@
-import { Formation, OpponentTeam, SwotData, GeneratedInsight } from '../types';
+import { Formation, OpponentTeam, SwotData, GeneratedInsight, Player } from '../types';
 
+/**
+ * Intelligent Tactical Engine
+ * Synthesizes:
+ * 1. Current Active Players (HGUFC roster & on-pitch lineup, custom names, roles)
+ * 2. Rival Active Players & Customizations (edited names, positions, numbers)
+ * 3. User SWOT qualitative text (dynamic multi-language semantic parsing: Spanish & English)
+ * 4. Formation vs Formation geometry & numerical superiorities
+ * 5. Opponent identity & play style
+ */
 export function generateTacticalInsights(
   hgufcFormation: Formation,
   rivalFormation: Formation,
   opponent: OpponentTeam,
-  swot: SwotData
+  swot: SwotData,
+  players?: Player[]
 ): GeneratedInsight[] {
   const insights: GeneratedInsight[] = [];
   let idCounter = 1;
 
+  // Active HGUFC on-pitch starters or top players
+  const onPitchPlayers = players ? players.filter(p => p.pitchX !== undefined && p.pitchY !== undefined) : [];
+  const startersOrSquad = onPitchPlayers.length > 0 ? onPitchPlayers : (players || []);
+
+  const starPlaymaker = startersOrSquad.find(p => p.position === 'MID') || { name: 'Central Playmaker', number: 10 };
+  const starForward = startersOrSquad.find(p => p.position === 'FWD') || { name: 'Leading Striker', number: 9 };
+  const leadDefender = startersOrSquad.find(p => p.position === 'DEF') || { name: 'Center Back', number: 4 };
+  const goalkeeper = startersOrSquad.find(p => p.position === 'GK') || { name: 'Goalkeeper', number: 1 };
+
+  // Rival active players
+  const rivalSquad = opponent.players || [];
+  const rivalKeyAttacker = rivalSquad.find(p => p.position === 'FWD') || rivalSquad[10] || { name: `${opponent.shortName} #9`, number: 9 };
+  const rivalMidfielder = rivalSquad.find(p => p.position === 'MID') || rivalSquad[7] || { name: `${opponent.shortName} #10`, number: 10 };
+  const rivalDefender = rivalSquad.find(p => p.position === 'DEF') || rivalSquad[3] || { name: `${opponent.shortName} Defender`, number: 4 };
+
   const hName = hgufcFormation.name;
   const rName = rivalFormation.name;
-  const swotCombined = `${swot.ourStrengths} ${swot.ourWeaknesses} ${swot.rivalStrengths} ${swot.rivalWeaknesses}`.toLowerCase();
 
-  // 1. FORMATION VS FORMATION TACTICAL MISMATCH ANALYSIS
+  // Multi-language text normalization for SWOT analysis (supports Spanish and English keywords)
+  const norm = (str: string) => (str || '').toLowerCase();
+  const ourStr = norm(swot.ourStrengths);
+  const ourWeak = norm(swot.ourWeaknesses);
+  const rivStr = norm(swot.rivalStrengths);
+  const rivWeak = norm(swot.rivalWeaknesses);
+  const swotCombined = `${ourStr} ${ourWeak} ${rivStr} ${rivWeak}`;
+
+  // Helper to split text into distinct user observations/sentences
+  const extractUserSentences = (text: string): string[] => {
+    if (!text) return [];
+    return text
+      .split(/[.\n;•-]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 3);
+  };
+
+  const ourStrengthItems = extractUserSentences(swot.ourStrengths);
+  const ourWeaknessItems = extractUserSentences(swot.ourWeaknesses);
+  const rivalStrengthItems = extractUserSentences(swot.rivalStrengths);
+  const rivalWeaknessItems = extractUserSentences(swot.rivalWeaknesses);
+
+  // =========================================================================
+  // 1. DYNAMIC DIRECTIVES DERIVED FROM USER'S CUSTOM SWOT INPUTS
+  // =========================================================================
+
+  // A. EXPLOITING IDENTIFIED RIVAL WEAKNESSES (User input in DAFO "Rival Weaknesses")
+  if (rivalWeaknessItems.length > 0) {
+    rivalWeaknessItems.forEach((weaknessText, idx) => {
+      const lower = weaknessText.toLowerCase();
+      let category: GeneratedInsight['category'] = 'Spatial / Half-Spaces';
+      let title = `Exploit Rival Vulnerability: "${weaknessText.slice(0, 38)}${weaknessText.length > 38 ? '...' : ''}"`;
+      let directive = `Instruct ${starPlaymaker.name} and ${starForward.name} to systematically target this rival flaw during active attacking phases.`;
+
+      if (lower.includes('lento') || lower.includes('slow') || lower.includes('velocidad') || lower.includes('speed') || lower.includes('espalda') || lower.includes('behind')) {
+        category = 'Tactical Phase';
+        title = `Direct In-Behind Balls vs Slow Rival Defenders`;
+        directive = `${starPlaymaker.name} (#${starPlaymaker.number}) must release early direct diagonal balls behind ${rivalDefender.name} into space for ${starForward.name}.`;
+      } else if (lower.includes('banda') || lower.includes('lateral') || lower.includes('wing') || lower.includes('flanco') || lower.includes('flank') || lower.includes('centro') || lower.includes('cross')) {
+        category = 'Numerical Overload';
+        title = `Wide Channel Isolation & Overloads`;
+        directive = `Generate 2v1 overloads on the wings against ${opponent.shortName} and deliver rapid cutbacks across the penalty spot.`;
+      } else if (lower.includes('presion') || lower.includes('press') || lower.includes('salida') || lower.includes('build') || lower.includes('error') || lower.includes('fallo') || lower.includes('portero') || lower.includes('keeper')) {
+        category = 'Pressing Traps';
+        title = `Aggressive High-Block Pressing Trap`;
+        directive = `Trigger synchronized 3-man forward press when ${opponent.shortName}'s backline attempts to circulate, forcing immediate turnovers in their defensive third.`;
+      } else if (lower.includes('balon parado') || lower.includes('set piece') || lower.includes('corner') || lower.includes('falta') || lower.includes('aereo') || lower.includes('aerial')) {
+        category = 'Set Pieces';
+        title = `Target Rival Set-Piece Defensive Disorganization`;
+        directive = `Deliver inswinging dead balls into the 6-yard box targeting ${leadDefender.name} at the near post.`;
+      } else if (lower.includes('medio') || lower.includes('midfield') || lower.includes('espacio') || lower.includes('space') || lower.includes('lineas') || lower.includes('zone 14')) {
+        category = 'Spatial / Half-Spaces';
+        title = `Occupy Between-the-Lines Pocket (Zone 14)`;
+        directive = `${starPlaymaker.name} must operate in the seams between ${opponent.shortName}'s midfield and defensive lines to receive on the half-turn.`;
+      } else {
+        directive = `Tactical instruction based on SWOT input "${weaknessText}": exploit this specific gap by concentrating attacking phases down this channel.`;
+      }
+
+      insights.push({
+        id: `opp-swot-rw-${idx}-${idCounter++}`,
+        type: 'opportunity',
+        category,
+        title,
+        description: `Directly derived from your DAFO assessment of ${opponent.name}: "${weaknessText}".`,
+        actionableDirective: directive
+      });
+    });
+  }
+
+  // B. NEUTRALIZING IDENTIFIED RIVAL STRENGTHS (User input in DAFO "Rival Strengths")
+  if (rivalStrengthItems.length > 0) {
+    rivalStrengthItems.forEach((strengthText, idx) => {
+      const lower = strengthText.toLowerCase();
+      let category: GeneratedInsight['category'] = 'Defensive Transition';
+      let title = `Neutralize Threat: "${strengthText.slice(0, 38)}${strengthText.length > 38 ? '...' : ''}"`;
+      let directive = `Designate ${leadDefender.name} and our defensive midfield pivot to double-team and restrict time and space for ${rivalKeyAttacker.name}.`;
+
+      if (lower.includes('contra') || lower.includes('counter') || lower.includes('transicion') || lower.includes('transition') || lower.includes('rapido') || lower.includes('fast') || lower.includes('velocidad')) {
+        category = 'Defensive Transition';
+        title = `Rest-Defense Safeguard against Rival Counter-Attack`;
+        directive = `Enforce a strict 3+1 rest-defense structure behind the ball. Never allow ${rivalKeyAttacker.name} (#${rivalKeyAttacker.number}) isolated 1v1 situations in open field.`;
+      } else if (lower.includes('remate') || lower.includes('tiro') || lower.includes('shoot') || lower.includes('gol') || lower.includes('delantero') || lower.includes('striker')) {
+        category = 'Defensive Transition';
+        title = `Tight Marking on Primary Finisher ${rivalKeyAttacker.name}`;
+        directive = `${leadDefender.name} (#${leadDefender.number}) must maintain touch-tight marking inside the 18-yard box, denying ${rivalKeyAttacker.name} cleanly turning toward goal.`;
+      } else if (lower.includes('pase') || lower.includes('creador') || lower.includes('playmaker') || lower.includes('10') || lower.includes('asistencia') || lower.includes('vision')) {
+        category = 'Spatial / Half-Spaces';
+        title = `Screen Passing Channels to ${rivalMidfielder.name}`;
+        directive = `Position our defensive midfielder directly in the central passing lane to cut off supply lines to ${rivalMidfielder.name} (#${rivalMidfielder.number}).`;
+      } else if (lower.includes('balon parado') || lower.includes('corner') || lower.includes('set piece') || lower.includes('cabeza') || lower.includes('header') || lower.includes('falta')) {
+        category = 'Set Pieces';
+        title = `Hybrid Set-Piece Defense vs Rival Aerial Threat`;
+        directive = `Deploy a 4-man zonal line along the 6-yard box with man-to-man tight marking on their tallest target ${rivalDefender.name}.`;
+      }
+
+      insights.push({
+        id: `opp-swot-rs-${idx}-${idCounter++}`,
+        type: 'threat',
+        category,
+        title,
+        description: `Identified from your DAFO rival threat assessment of ${opponent.name}: "${strengthText}".`,
+        actionableDirective: directive
+      });
+    });
+  }
+
+  // C. SAFEGUARDING IDENTIFIED INTERNAL WEAKNESSES (User input in DAFO "Our Weaknesses")
+  if (ourWeaknessItems.length > 0) {
+    ourWeaknessItems.forEach((weaknessText, idx) => {
+      const lower = weaknessText.toLowerCase();
+      let category: GeneratedInsight['category'] = 'Defensive Transition';
+      let title = `Tactical Safeguard: "${weaknessText.slice(0, 38)}${weaknessText.length > 38 ? '...' : ''}"`;
+      let directive = `Reinforce collective covering distances and ensure ${goalkeeper.name} communicates actively to prevent defensive breakdowns.`;
+
+      if (lower.includes('espalda') || lower.includes('behind') || lower.includes('lateral') || lower.includes('fullback') || lower.includes('subida')) {
+        title = `Fullback Rest-Defense Cover`;
+        directive = `When our fullback advances into the attacking third, the holding midfielder must drop into the vacated flank channel to prevent quick breaks by ${rivalKeyAttacker.name}.`;
+      } else if (lower.includes('perdida') || lower.includes('turnover') || lower.includes('error') || lower.includes('pase') || lower.includes('salida')) {
+        category = 'Defensive Transition';
+        title = `First Phase Build-Up Safety Rule`;
+        directive = `Eliminate risky square passes across our penalty box. ${leadDefender.name} must choose secure vertical line-passes or clip into the channels.`;
+      } else if (lower.includes('aereo') || lower.includes('segunda') || lower.includes('second ball') || lower.includes('despeje')) {
+        category = 'Set Pieces';
+        title = `Edge-of-Box Second Ball Seal`;
+        directive = `Assign two central players exclusively to vacuum up clearances on the 18-yard semi-circle on both defensive and offensive set pieces.`;
+      }
+
+      insights.push({
+        id: `opp-swot-ow-${idx}-${idCounter++}`,
+        type: 'threat',
+        category,
+        title,
+        description: `Protective directive addressing our reported squad weakness: "${weaknessText}".`,
+        actionableDirective: directive
+      });
+    });
+  }
+
+  // D. CAPITALIZING ON IDENTIFIED INTERNAL STRENGTHS (User input in DAFO "Our Strengths")
+  if (ourStrengthItems.length > 0) {
+    ourStrengthItems.forEach((strengthText, idx) => {
+      const lower = strengthText.toLowerCase();
+      let category: GeneratedInsight['category'] = 'Spatial / Half-Spaces';
+      let title = `Maximize Strength: "${strengthText.slice(0, 38)}${strengthText.length > 38 ? '...' : ''}"`;
+      let directive = `Design the game plan to channel 60%+ of possession through this strength to dictate tempo over ${opponent.name}.`;
+
+      if (lower.includes('regate') || lower.includes('1v1') || lower.includes('dribble') || lower.includes('extremo') || lower.includes('winger') || lower.includes('banda')) {
+        category = 'Numerical Overload';
+        title = `Isolate Wingers for Direct 1v1 Take-Ons`;
+        directive = `Switch play rapidly to clear out the flank and give our wide attacker direct 1v1 isolation against ${rivalDefender.name}.`;
+      } else if (lower.includes('pase') || lower.includes('posesion') || lower.includes('control') || lower.includes('ritmo') || lower.includes('midfield')) {
+        category = 'Spatial / Half-Spaces';
+        title = `Midfield Tempo Control & Triangle Combinations`;
+        directive = `Establish 3-man passing triangles around ${starPlaymaker.name} (#${starPlaymaker.number}) to manipulate ${opponent.shortName}'s central block.`;
+      } else if (lower.includes('presion') || lower.includes('recuperacion') || lower.includes('intensidad') || lower.includes('press')) {
+        category = 'Pressing Traps';
+        title = `High-Intensity Counter-Press (5-Second Rule)`;
+        directive = `On possession loss, execute an immediate 5-second counter-press to win the ball back within 35 meters of ${opponent.shortName}'s goal.`;
+      }
+
+      insights.push({
+        id: `opp-swot-os-${idx}-${idCounter++}`,
+        type: 'opportunity',
+        category,
+        title,
+        description: `Leveraging our core tactical weapon: "${strengthText}".`,
+        actionableDirective: directive
+      });
+    });
+  }
+
+  // =========================================================================
+  // 2. FORMATION VS FORMATION STRUCTURAL MISMATCH ANALYSIS
+  // =========================================================================
+
   // Wing Overload vs 3-at-the-back / 5-at-the-back
   if ((rivalFormation.category === '3-at-back' || rivalFormation.category === '5-at-back') && 
       (hName.includes('4-3-3') || hName.includes('3-4-3') || hName.includes('4-2-3-1'))) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'opportunity',
       category: 'Numerical Overload',
       title: 'Flank Overload Against Isolated Wingbacks',
-      description: `Rival's ${rivalFormation.name} relies on lone wingbacks to cover the entire touchline. Our wide wingers and advanced fullbacks create instant 2v1 overloads on both flanks before their wide center-backs can shift across.`,
-      actionableDirective: 'Instruct our wingers to pin their wide center-backs inside while our fullbacks execute dynamic underlapping/overlapping runs into the final third.'
+      description: `${opponent.name}'s ${rivalFormation.name} relies on lone wingbacks to cover the touchline. Our wide forwards and advanced fullbacks create instant 2v1 overloads before their wide center-backs can shift across.`,
+      actionableDirective: `Instruct our wingers to pin their wide center-backs inside while fullbacks execute dynamic underlapping/overlapping runs toward ${starForward.name}.`
     });
   }
 
-  // Central Midfield Clashes (e.g. Diamond or 3-man midfield vs Flat 2-man midfield)
+  // Central Midfield Clashes (3-man midfield vs Flat 2-man midfield)
   if ((hName.includes('Diamond') || hName.includes('4-3-3') || hName.includes('3-5-2')) && 
       (rName.includes('4-4-2 Flat') || rName.includes('3-4-3 Flat'))) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'opportunity',
       category: 'Spatial / Half-Spaces',
       title: 'Central Midfield Overload (3v2 Dominance)',
-      description: `Our three central midfielders possess a natural 3v1 or 3v2 numerical advantage against ${opponent.name}'s flat two-man midfield line, dominating Zone 14 and the central channel.`,
-      actionableDirective: 'Shahdan Sulaiman & Kristijan Krajcek must play on staggered vertical lines to continuously receive the ball facing forward in the half-spaces.'
+      description: `Our three central midfielders possess a natural 3v2 numerical advantage against ${opponent.name}'s flat two-man midfield line, dominating Zone 14 and the central channel.`,
+      actionableDirective: `${starPlaymaker.name} must play on staggered vertical lines to continuously receive the ball facing forward in the half-spaces.`
     });
   }
 
-  // Double Pivot Shield against #10
+  // Double Pivot Shield against Rival Playmaker
   if (hName.includes('4-2-3-1') && (rName.includes('4-2-3-1') || rName.includes('Diamond'))) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'threat',
       category: 'Defensive Transition',
       title: 'Zone 14 Dual Playmaker Congestion',
-      description: `Both teams deploy a classic central attacking midfielder (#10). ${opponent.name} will attempt to feed their primary creator between our midfield and defensive lines.`,
+      description: `Both teams deploy a central attacking midfielder. ${opponent.name} will attempt to feed ${rivalMidfielder.name} between our midfield and defensive lines.`,
       actionableDirective: 'Our defensive pivot must maintain tight horizontal spacing (no wider than 12 meters apart) to deny vertical line-breaking passing lanes.'
     });
   }
 
-  // 3 CBs vs Single Striker (Build-up Superiority)
+  // 3 CBs vs Single Striker Build-up Superiority
   if (hgufcFormation.category === '3-at-back' && (rName.includes('4-2-3-1') || rName.includes('5-4-1') || rName.includes('4-3-3'))) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'opportunity',
       category: 'Tactical Phase',
       title: '3v1 First Phase Build-Up Circulation',
-      description: `In the first build-up phase, our 3 central defenders have effortless numerical superiority over ${opponent.name}'s single center forward, allowing our outside CBs to step forward into midfield unchecked.`,
-      actionableDirective: 'Encourage Kazuma Takayama and Anders Aplin to drive into the rival half with the ball until a rival midfielder commits, opening an unmarked teammate.'
+      description: `In the first build-up phase, our 3 central defenders have numerical superiority over ${opponent.name}'s single forward (${rivalKeyAttacker.name}), allowing outside CBs to step forward unchecked.`,
+      actionableDirective: `Encourage ${leadDefender.name} to drive into ${opponent.shortName}'s half until a midfielder commits, opening an unmarked teammate.`
     });
   }
 
-  // Threat: Counter-attack in wide channels when HGUFC plays 3-5-2 or high wingbacks
-  if (hgufcFormation.category === '3-at-back' && (rName.includes('4-3-3') || rName.includes('4-2-3-1'))) {
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'threat',
-      category: 'Defensive Transition',
-      title: 'Rest-Defense Exposure Behind Advanced Wingbacks',
-      description: `When our wingbacks press forward into the final third, ${opponent.name}'s pacey wide forwards will lurk in the transition channels between our outside CBs and the touchline.`,
-      actionableDirective: 'The opposite wingback must tuck inward as a third defender when attacking down the flank, preserving a rigid 3+1 rest-defense structure.'
-    });
-  }
-
-  // Threat: 2 Striker Pinning our CBs (4-4-2 or 3-5-2 Rival vs 4-at-back HGUFC)
+  // Threat: 2 Striker Pinning our CBs
   if (hgufcFormation.category === '4-at-back' && (rName.includes('4-4-2') || rName.includes('3-5-2') || rName.includes('5-3-2'))) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'threat',
       category: 'Defensive Transition',
-      title: '2v2 Strikers Pinning Central Defenders',
-      description: `${opponent.name}'s dual center forward partnership will pin both of our center-backs in direct 1v1 physical duels, preventing them from stepping out to assist our fullbacks.`,
-      actionableDirective: 'Our holding defensive midfielder must drop between the two center-backs (La Salida Lavolpiana) to create a protective 3v2 defensive superiority.'
+      title: `2v2 Strikers Pinning Central Defenders`,
+      description: `${opponent.name}'s dual striker partnership will pin both of our center-backs in direct 1v1 physical duels with ${rivalKeyAttacker.name}.`,
+      actionableDirective: `Our holding midfielder must drop between the two center-backs (La Salida Lavolpiana) to create a protective 3v2 defensive superiority.`
     });
   }
 
-  // Low Block Exploitation (Rival plays 5-4-1 or 5-3-2)
+  // Low Block Exploitation (Rival plays 5-at-back)
   if (rivalFormation.category === '5-at-back') {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-form-${idCounter++}`,
       type: 'opportunity',
       category: 'Spatial / Half-Spaces',
       title: 'Half-Space Cutbacks and Edge-of-Box Shooting',
       description: `${opponent.name} will defend in a deep low block inside their 18-yard box. High crosses will be cleared by their 3 central defenders; therefore, low cutbacks to the penalty spot and edge-of-box shots are mathematically superior.`,
-      actionableDirective: 'Work the ball into the half-space byline before delivering low driven cutbacks backward into the arriving second-line runners.'
+      actionableDirective: `Work the ball into the half-space byline before delivering low driven cutbacks backward to ${starPlaymaker.name} arriving on the edge of the box.`
     });
   }
 
-  // 2. OPPONENT-SPECIFIC INTELLIGENCE
+  // =========================================================================
+  // 3. OPPONENT-SPECIFIC INTELLIGENCE (Dynamic with Custom Names & Roles)
+  // =========================================================================
   if (opponent.name.includes('Lion City Sailors')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'opportunity',
       category: 'Pressing Traps',
       title: 'Exploit Sailors High Defensive Line with Direct Diagonals',
-      description: 'Lion City Sailors consistently push their backline up to the halfway line to strangle possession. Their center-backs are vulnerable to diagonal lofted passes in behind the left fullback.',
-      actionableDirective: 'Launch early direct balls into the right attacking channel behind their advancing fullback for Gabriel Quak / Dejan Racic to chase.'
-    });
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'threat',
-      category: 'Spatial / Half-Spaces',
-      title: 'Inverted Winger Penetration in Inner Channels',
-      description: 'Sailors wingers cut inside on their stronger foot into Zone 14 shooting territory with exceptional velocity.',
-      actionableDirective: 'Double-team their wingers on the inside shoulder; show them to the outside touchline and force crosses on their weaker foot.'
+      description: `${opponent.name} pushes their backline up to the halfway line to strangle possession. Their center-backs are vulnerable to diagonal passes behind their fullbacks.`,
+      actionableDirective: `Launch early direct balls into the attacking channel behind their advancing fullback for ${starForward.name} to chase.`
     });
   } else if (opponent.name.includes('Tampines Rovers')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'opportunity',
       category: 'Pressing Traps',
       title: 'Mid-Block Pressing Trap at Our Tampines Hub',
-      description: 'Tampines play intricate short-passing triangles out from their goalkeeper. Setting a mid-block trap when their defensive pivot receives with his back turned will generate immediate turnovers 30 meters from goal.',
+      description: `${opponent.name} plays intricate short-passing triangles out from their goalkeeper. Setting a mid-block trap when their pivot (${rivalMidfielder.name}) receives turned will generate turnovers.`,
       actionableDirective: 'Allow the first CB pass, then trigger aggressive 3-man synchronized press once the ball travels into their #6.'
-    });
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'threat',
-      category: 'Defensive Transition',
-      title: 'Rapid Combination Play & Central Cutbacks',
-      description: 'Tampines Rovers are lethal when penetrating via rapid give-and-go wall passes into the penalty area.',
-      actionableDirective: 'Center-backs must not dive into ground tackles; jockey and maintain compact 6-yard box coverage to intercept low cutback passes.'
     });
   } else if (opponent.name.includes('Balestier Khalsa')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'threat',
       category: 'Set Pieces',
-      title: 'Aerial Chaos on Second Balls & Long Deliveries',
-      description: 'Balestier Khalsa employs an aggressive physical game with direct aerial deliveries into our penalty area, aiming for knockdowns.',
-      actionableDirective: 'Designate Anders Aplin to contest the primary header; assign our two central midfielders to aggressively seal the "second ball fall zone" at the 18-yard arc.'
-    });
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'opportunity',
-      category: 'Numerical Overload',
-      title: 'Transition Counter Against Overcommitted Wingbacks',
-      description: 'Balestier pushes their wingbacks high early in possession, leaving cavernous open grass on the turnover.',
-      actionableDirective: 'Instant forward passing upon ball recovery; release wide forwards within 3 seconds of winning possession.'
+      title: `Aerial Chaos on Long Deliveries to ${rivalKeyAttacker.name}`,
+      description: `${opponent.name} employs direct aerial deliveries into our penalty area, aiming for knockdowns.`,
+      actionableDirective: `Designate ${leadDefender.name} to contest the primary header; assign our central midfielders to aggressively seal the second ball fall zone.`
     });
   } else if (opponent.name.includes('Geylang International')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'opportunity',
       category: 'Spatial / Half-Spaces',
       title: 'Midfield Seams Between Geylang Flat Banks',
-      description: 'Geylang International can leave substantial vertical gaps between their midfield 4 and defensive 4 when chasing games.',
-      actionableDirective: 'Position our attacking midfielders in the seams between their lines to turn and shoot or slide through-balls to our strikers.'
+      description: `${opponent.name} leaves vertical gaps between their midfield and defensive lines when chasing games.`,
+      actionableDirective: `Position ${starPlaymaker.name} in the seams between their lines to turn and shoot or slide through-balls.`
     });
   } else if (opponent.name.includes('Young Lions')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'opportunity',
       category: 'Tactical Phase',
       title: 'Set-Piece Disorganization & High-Press Traps',
-      description: 'Young Lions display high enthusiasm but struggle under organized pressing traps during defensive transition and set pieces.',
-      actionableDirective: 'Target near-post inswinging corners and maintain aggressive high pressing for the opening 20 minutes to force defensive errors.'
+      description: `${opponent.name} displays high enthusiasm but struggles under organized pressing traps during defensive transitions.`,
+      actionableDirective: 'Target near-post inswinging corners and maintain aggressive high pressing for the opening 20 minutes.'
     });
   } else if (opponent.name.includes('Jurong') || opponent.name.includes('Tanjong Pagar')) {
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-team-${idCounter++}`,
       type: 'opportunity',
       category: 'Numerical Overload',
       title: 'Overload Weak Side through Rapid Cross-Field Switches',
-      description: `${opponent.name} compresses all 10 outfield players into a narrow defensive block. Rapid cross-field switches will catch their opposite wingback disconnected.`,
-      actionableDirective: 'Shahdan Sulaiman must execute quick diagonal switches to switch the point of attack from congested right flank to isolated left wing.'
+      description: `${opponent.name} compresses into a narrow defensive block. Rapid cross-field switches catch their opposite wingback disconnected.`,
+      actionableDirective: `${starPlaymaker.name} must execute quick diagonal switches to switch the point of attack from congested flank to isolated weak side.`
     });
-  }
-
-  // 3. SWOT TEXT-PARSED DYNAMIC DIRECTIVES
-  if (swotCombined.includes('turnover') || swotCombined.includes('transition') || swotCombined.includes('counter')) {
+  } else {
+    // Custom / edited rival team generic dynamic directive
     insights.push({
-      id: `opp-${idCounter++}`,
+      id: `opp-custom-${idCounter++}`,
       type: 'threat',
       category: 'Defensive Transition',
-      title: 'Defensive Rest-Defense Stabilization',
-      description: `Identified from SWOT analysis: High transition vulnerability on possession loss requires proactive rest-defense safeguarding.`,
-      actionableDirective: 'Implement strict "Rule of 5" — at least five HGUFC outfield players must remain behind the ball line at all moments during active possession.'
-    });
-  }
-
-  if (swotCombined.includes('cross') || swotCombined.includes('wide') || swotCombined.includes('wing')) {
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'opportunity',
-      category: 'Spatial / Half-Spaces',
-      title: 'Exploit Flank Deliveries with Staggered Box Runs',
-      description: `SWOT intelligence indicates prominent wide progression superiority against ${opponent.name}.`,
-      actionableDirective: 'When wide delivery is initiated, attack the box with 3 runners: near post dart, penalty spot check-run, and back-post blindside crash.'
-    });
-  }
-
-  if (swotCombined.includes('press') || swotCombined.includes('high block') || swotCombined.includes('traps')) {
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'opportunity',
-      category: 'Pressing Traps',
-      title: 'Coordinated High-Press Trapping Sequence',
-      description: `Opponent exhibits difficulty circulating under direct forward line pressure.`,
-      actionableDirective: 'Curve the striker pressing angle to block the pass back to the keeper, funneling their center-back toward the sideline trap.'
-    });
-  }
-
-  if (swotCombined.includes('aerial') || swotCombined.includes('set piece') || swotCombined.includes('corner')) {
-    insights.push({
-      id: `opp-${idCounter++}`,
-      type: 'threat',
-      category: 'Set Pieces',
-      title: 'Zonal-Man Hybrid Set-Piece Defense',
-      description: 'Identified aerial threats from opponent dead-ball situations.',
-      actionableDirective: 'Deploy 3 dominant headers in a zonal line along the 6-yard box with man-to-man marking on their 3 tallest aerial threats.'
+      title: `Neutralize ${opponent.name} In-Possession Structure`,
+      description: `Analysis for ${opponent.name} (${opponent.shortName}) indicates key tactical danger from ${rivalKeyAttacker.name} (#${rivalKeyAttacker.number}).`,
+      actionableDirective: `Maintain structured rest-defense and deny ${rivalKeyAttacker.name} turning unchecked in central zones.`
     });
   }
 

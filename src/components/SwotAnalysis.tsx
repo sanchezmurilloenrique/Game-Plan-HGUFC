@@ -38,6 +38,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'opportunity' | 'threat'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   const opportunities = insights.filter(i => i.type === 'opportunity');
   const threats = insights.filter(i => i.type === 'threat');
@@ -51,6 +52,14 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleRecalculate = () => {
+    setIsRecalculating(true);
+    onRegenerateInsights();
+    setTimeout(() => {
+      setIsRecalculating(false);
+    }, 450);
   };
 
   return (
@@ -213,11 +222,12 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              onClick={onRegenerateInsights}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-slate-900 bg-orange-400 hover:bg-orange-300 active:bg-orange-500 rounded-lg transition-colors cursor-pointer"
+              onClick={handleRecalculate}
+              disabled={isRecalculating}
+              className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-slate-900 bg-orange-400 hover:bg-orange-300 active:bg-orange-500 rounded-lg transition-colors cursor-pointer disabled:opacity-75"
             >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Recalculate Analysis
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+              {isRecalculating ? 'Analyzing...' : 'Recalculate Analysis'}
             </button>
           </div>
         </div>
@@ -268,7 +278,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
         </div>
 
         {/* Insights Cards List */}
-        <div className="p-4 space-y-3">
+        <div className={`p-4 space-y-3 transition-opacity duration-200 ${isRecalculating ? 'opacity-40' : 'opacity-100'}`}>
           {displayedInsights.length === 0 ? (
             <div className="text-center py-8 text-slate-400 text-xs">
               No tactical insights matching this filter. Click 'Recalculate Analysis' to refresh.
