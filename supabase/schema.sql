@@ -158,6 +158,14 @@ CREATE TABLE IF NOT EXISTS public.tactical_instructions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- TABLE: app_state (Cross-Device Realtime Game Plan Synchronization)
+CREATE TABLE IF NOT EXISTS public.app_state (
+    key TEXT PRIMARY KEY,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- 5. INDEXES FOR HIGH QUERY PERFORMANCE
 -- ==============================================================================
@@ -197,6 +205,9 @@ CREATE TRIGGER trg_instructions_updated_at BEFORE UPDATE ON public.tactical_inst
 DROP TRIGGER IF EXISTS trg_club_profile_updated_at ON public.club_profile;
 CREATE TRIGGER trg_club_profile_updated_at BEFORE UPDATE ON public.club_profile FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_app_state_updated_at ON public.app_state;
+CREATE TRIGGER trg_app_state_updated_at BEFORE UPDATE ON public.app_state FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ==============================================================================
 -- 7. ROW LEVEL SECURITY (RLS) POLICIES FOR SUPABASE
 -- ==============================================================================
@@ -208,10 +219,14 @@ ALTER TABLE public.opponent_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.swot_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tactical_instructions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_state ENABLE ROW LEVEL SECURITY;
 
 -- Allow public and authenticated clients full access for coaches collaboration
 DROP POLICY IF EXISTS "Public full access to club_profile" ON public.club_profile;
 CREATE POLICY "Public full access to club_profile" ON public.club_profile FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access to app_state" ON public.app_state;
+CREATE POLICY "Public full access to app_state" ON public.app_state FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public full access to players" ON public.players;
 CREATE POLICY "Public full access to players" ON public.players FOR ALL USING (true) WITH CHECK (true);

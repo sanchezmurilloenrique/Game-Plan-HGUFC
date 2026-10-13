@@ -1,14 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Check, Download, Database, ExternalLink, Terminal, ShieldCheck, Sparkles, Layers, Key, Link as LinkIcon, Cloud, CheckCircle2, AlertCircle, Save } from 'lucide-react';
-import { getSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig, getSupabaseClient } from '../services/supabaseService';
+import { 
+  X, 
+  Copy, 
+  Check, 
+  Download, 
+  Database, 
+  ExternalLink, 
+  Terminal, 
+  ShieldCheck, 
+  Sparkles, 
+  Key, 
+  Link as LinkIcon, 
+  Cloud, 
+  CheckCircle2, 
+  Save, 
+  Share2, 
+  Upload, 
+  Smartphone, 
+  Monitor, 
+  Layers 
+} from 'lucide-react';
+import { 
+  getSupabaseConfig, 
+  saveSupabaseConfig, 
+  clearSupabaseConfig, 
+  generateShareableSyncUrl 
+} from '../services/supabaseService';
+import { Player, Formation, OpponentTeam, MatchPlan } from '../types';
 
 interface SupabaseSqlModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onDataImported?: () => void;
+  currentData?: {
+    players: Player[];
+    matchPlan: MatchPlan;
+    formations: Formation[];
+    opponents: OpponentTeam[];
+  };
 }
 
 export const SUPABASE_SQL_SCRIPT = `-- ==============================================================================
--- GAME PLAN HGUFC - SUPABASE DATABASE SCHEMA
+-- GAME PLAN HGUFC - SUPABASE DATABASE SCHEMA & MULTI-DEVICE SYNC
 -- Club: Hougang United FC (Singapore Premier League)
 -- Database Engine: PostgreSQL 15+ (Fully Compatible with Supabase)
 -- ==============================================================================
@@ -48,6 +81,14 @@ $$ language 'plpgsql';
 -- ==============================================================================
 -- 4. TABLES DEFINITION
 -- ==============================================================================
+
+-- TABLE: app_state (Unified Realtime Cross-Device Game Plan Synchronization)
+CREATE TABLE IF NOT EXISTS public.app_state (
+    key TEXT PRIMARY KEY,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- TABLE: club_profile (Hougang United FC Official Club Identity & Branding)
 CREATE TABLE IF NOT EXISTS public.club_profile (
@@ -133,7 +174,7 @@ CREATE TABLE IF NOT EXISTS public.match_plans (
     selected_opponent_id TEXT REFERENCES public.opponents(id) ON DELETE SET NULL,
     hgufc_formation_id TEXT REFERENCES public.formations(id) ON DELETE SET NULL,
     rival_formation_id TEXT REFERENCES public.formations(id) ON DELETE SET NULL,
-    show_pitch_zones BOOLEAN DEFAULT true,
+    show_pitch_zones BOOLEAN DEFAULT false,
     show_opponent_tokens BOOLEAN DEFAULT true,
     active_pitch_tool VARCHAR(30) DEFAULT 'select',
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -205,6 +246,9 @@ CREATE TRIGGER trg_instructions_updated_at BEFORE UPDATE ON public.tactical_inst
 DROP TRIGGER IF EXISTS trg_club_profile_updated_at ON public.club_profile;
 CREATE TRIGGER trg_club_profile_updated_at BEFORE UPDATE ON public.club_profile FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_app_state_updated_at ON public.app_state;
+CREATE TRIGGER trg_app_state_updated_at BEFORE UPDATE ON public.app_state FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ==============================================================================
 -- 7. ROW LEVEL SECURITY (RLS) POLICIES FOR SUPABASE
 -- ==============================================================================
@@ -216,9 +260,13 @@ ALTER TABLE public.opponent_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.swot_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tactical_instructions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_state ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public full access to club_profile" ON public.club_profile;
 CREATE POLICY "Public full access to club_profile" ON public.club_profile FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access to app_state" ON public.app_state;
+CREATE POLICY "Public full access to app_state" ON public.app_state FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public full access to players" ON public.players;
 CREATE POLICY "Public full access to players" ON public.players FOR ALL USING (true) WITH CHECK (true);
@@ -244,7 +292,6 @@ CREATE POLICY "Public full access to tactical_instructions" ON public.tactical_i
 -- ==============================================================================
 -- 8. INITIAL SEED DATA
 -- ==============================================================================
--- 8.1 HOUGANG UNITED FC OFFICIAL CLUB PROFILE SEED
 INSERT INTO public.club_profile (id, name, short_name, logo_url, primary_color, secondary_color, stadium, league) VALUES
 ('club-hgufc', 'Hougang United Football Club', 'Hougang United FC', 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original', '#EA580C', '#FFFFFF', 'Jalan Besar Stadium', 'Singapore Premier League (SPL)')
 ON CONFLICT (id) DO UPDATE SET
@@ -252,14 +299,20 @@ ON CONFLICT (id) DO UPDATE SET
     updated_at = NOW();
 `;
 
-export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onClose }) => {
+export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ 
+  isOpen, 
+  onClose,
+  onDataImported,
+  currentData
+}) => {
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'sql' | 'guide' | 'tables' | 'connect'>('sql');
+  const [activeTab, setActiveTab] = useState<'connect' | 'devices' | 'sql' | 'guide'>('connect');
 
   // Supabase Credentials State
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [copiedSyncLink, setCopiedSyncLink] = useState(false);
 
   useEffect(() => {
     const config = getSupabaseConfig();
@@ -267,38 +320,90 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
       setSupabaseUrl(config.url);
       setSupabaseKey(config.anonKey);
     }
-  }, []);
+  }, [isOpen]);
 
   const handleSaveCredentials = () => {
     if (!supabaseUrl.trim() || !supabaseKey.trim()) {
-      setSaveStatus('Please enter both Supabase URL and Anon Key');
+      setSaveStatus('Por favor ingresa tanto la URL de Supabase como la clave Anon Key.');
       return;
     }
     saveSupabaseConfig({
       url: supabaseUrl.trim(),
       anonKey: supabaseKey.trim(),
     });
-    setSaveStatus('Credentials saved successfully! You can now use the Save button to sync.');
-    setTimeout(() => setSaveStatus(null), 3000);
+    setSaveStatus('¡Credenciales guardadas y sincronización en la nube activada!');
+    setTimeout(() => {
+      setSaveStatus(null);
+    }, 3500);
   };
 
   const handleClearCredentials = () => {
     clearSupabaseConfig();
     setSupabaseUrl('');
     setSupabaseKey('');
-    setSaveStatus('Credentials cleared.');
+    setSaveStatus('Credenciales eliminadas. Los cambios ahora se guardarán solo en este navegador.');
     setTimeout(() => setSaveStatus(null), 3000);
+  };
+
+  const handleCopySyncLink = () => {
+    const link = generateShareableSyncUrl();
+    if (link) {
+      navigator.clipboard.writeText(link);
+      setCopiedSyncLink(true);
+      setTimeout(() => setCopiedSyncLink(false), 3000);
+    } else {
+      setSaveStatus('Primero guarda tu URL y clave de Supabase para generar el enlace.');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    if (!currentData) return;
+    const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hgufc_game_plan_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.matchPlan || parsed.players) {
+          if (parsed.players) localStorage.setItem('hgufc_squad_v1', JSON.stringify(parsed.players));
+          if (parsed.formations) localStorage.setItem('hgufc_formations_v1', JSON.stringify(parsed.formations));
+          if (parsed.opponents) localStorage.setItem('hgufc_opponents_v1', JSON.stringify(parsed.opponents));
+          if (parsed.matchPlan) localStorage.setItem('hgufc_matchplan_v1', JSON.stringify(parsed.matchPlan));
+          setSaveStatus('¡Archivo táctico restaurado con éxito!');
+          if (onDataImported) onDataImported();
+          setTimeout(() => {
+            window.location.reload();
+          }, 1200);
+        }
+      } catch (err) {
+        setSaveStatus('El archivo JSON seleccionado no tiene un formato válido.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   if (!isOpen) return null;
 
-  const handleCopy = () => {
+  const handleCopySql = () => {
     navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleDownload = () => {
+  const handleDownloadSql = () => {
     const blob = new Blob([SUPABASE_SQL_SCRIPT], { type: 'text/sql' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -321,19 +426,19 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4.5 text-white flex items-center justify-between border-b border-slate-700">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-inner">
-              <Database className="w-5 h-5" />
+              <Cloud className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  Supabase Database Schema & Tables
+                  Sincronización en la Nube y Base de Datos Supabase
                 </h3>
                 <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">
-                  PostgreSQL 15+
+                  Multi-Dispositivo
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Complete relational tables, RLS policies, triggers, and SPL seed data for Game Plan HGUFC
+                Guarda tus cambios una vez y velos en cualquier móvil, tablet o PC en tiempo real
               </p>
             </div>
           </div>
@@ -347,330 +452,109 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between px-6 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-semibold">
+        <div className="flex items-center justify-between px-6 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-semibold overflow-x-auto">
           <div className="flex items-center space-x-2">
             <button
               type="button"
+              onClick={() => setActiveTab('connect')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === 'connect'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Conectar Supabase
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('devices')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === 'devices'
+                  ? 'bg-white text-orange-600 shadow-xs border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sincronizar Otro Dispositivo
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('sql')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === 'sql'
                   ? 'bg-white text-orange-600 shadow-xs border border-slate-200 font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              SQL Script (schema.sql)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('tables')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'tables'
-                  ? 'bg-white text-orange-600 shadow-xs border border-slate-200 font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Table Architecture (8 Tables)
+              Script SQL (schema.sql)
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('guide')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === 'guide'
                   ? 'bg-white text-orange-600 shadow-xs border border-slate-200 font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Setup Guide (3 Steps)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('connect')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'connect'
-                  ? 'bg-white text-emerald-600 shadow-xs border border-emerald-200 font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Cloud Connection & Sync
+              Guía de Despliegue en Vercel
             </button>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600 mr-1.5" />
-                  <span className="text-emerald-700 font-extrabold">Copied to Clipboard!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                  Copy SQL
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-lg shadow-2xs transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              Download .SQL
-            </button>
+          <div className="flex items-center space-x-2 ml-4 shrink-0">
+            {activeTab === 'sql' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600 mr-1.5" />
+                      <span className="text-emerald-700 font-extrabold">¡Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                      Copiar SQL
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadSql}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5" />
+                  .SQL
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-          {activeTab === 'sql' && (
-            <div>
-              <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
-                <span className="flex items-center gap-1.5">
-                  <Terminal className="w-4 h-4 text-orange-600" />
-                  Ready to paste into <strong>Supabase SQL Editor</strong>
-                </span>
-                <span className="text-slate-500 font-mono text-[11px]">
-                  File: /supabase/schema.sql
-                </span>
-              </div>
-              <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner">
-                <pre className="p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-[500px] leading-relaxed selection:bg-orange-500 selection:text-white">
-                  <code>{SUPABASE_SQL_SCRIPT}</code>
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'tables' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-orange-600"></span>
-                    public.club_profile
-                  </h4>
-                  <span className="text-[10px] bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">
-                    Club Identity & Crest
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  Stores Hougang United FC identity, official SVG crest logo URL, club colors, and home stadium.
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK, 'club-hgufc')</div>
-                  <div>• name, short_name ('Hougang United FC')</div>
-                  <div>• logo_url (Official Wikimedia SVG)</div>
-                  <div>• primary_color (#EA580C), secondary_color (#FFFFFF)</div>
-                  <div>• stadium, league ('SPL')</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                    public.players
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    30 HGUFC Players
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  Stores all 30 squad members (3 GKs with specialized styling + 27 Outfielders).
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK)</div>
-                  <div>• name, number, position (GK/DEF/MID/FWD)</div>
-                  <div>• role_label, preferred_foot, notes</div>
-                  <div>• pitch_x, pitch_y, is_starting</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                    public.formations
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    Tactical Setups
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  Tactical formations (4-3-3, 4-2-3-1, 3-5-2, etc.) and coordinate presets.
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK)</div>
-                  <div>• name, category, tactical_description</div>
-                  <div>• positions (JSONB Array of 11 roles/coordinates)</div>
-                  <div>• is_custom (BOOLEAN)</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                    public.opponents
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    SPL Rivals
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  All Singapore Premier League teams with custom colors, badges, and tactical traits.
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK), name, short_name</div>
-                  <div>• primary_color, secondary_color, logo_url</div>
-                  <div>• stadium, tactical_style, strengths[], weaknesses[]</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    public.opponent_players
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    Rival Squad Lineups
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  Customizable rival player rosters (Name, Shirt Number, Position, Tactical Role).
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK), opponent_id (FK cascade)</div>
-                  <div>• name, number, position, role</div>
-                  <div>• pitch_x, pitch_y coordinates</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    public.match_plans
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    Match Dossiers
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  Header details, fixture date, venue, opponent clash, and selected formations.
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• id (TEXT, PK), title, match_date, venue</div>
-                  <div>• selected_opponent_id, hgufc_formation_id, rival_formation_id</div>
-                  <div>• show_pitch_zones, show_opponent_tokens</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    public.swot_analyses & instructions
-                  </h4>
-                  <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
-                    Tactical Intelligence
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mb-2">
-                  4-quadrant SWOT matrix & 6-phase coaching game model directives.
-                </p>
-                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
-                  <div>• our_strengths, our_weaknesses, rival_strengths, rival_weaknesses</div>
-                  <div>• build_up_phase, in_possession_structure</div>
-                  <div>• out_of_possession_transition, pressing_triggers, rest_defense</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'guide' && (
-            <div className="space-y-4">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 mb-1">
-                      Create or Open your Supabase Project
-                    </h4>
-                    <p className="text-xs text-slate-600 mb-2">
-                      Go to <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-orange-600 font-semibold underline inline-flex items-center gap-0.5">supabase.com/dashboard <ExternalLink className="w-3 h-3" /></a> and select or create your project.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 mb-1">
-                      Navigate to the SQL Editor
-                    </h4>
-                    <p className="text-xs text-slate-600 mb-2">
-                      In the left sidebar of your Supabase project dashboard, click on <strong>SQL Editor</strong>, then click <strong>New Query</strong>.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 mb-1">
-                      Paste & Run the SQL Script
-                    </h4>
-                    <p className="text-xs text-slate-600 mb-2">
-                      Click the <strong>Copy SQL</strong> button above, paste the code into the query editor, and click <strong>Run</strong> (or press Cmd/Ctrl + Enter).
-                    </p>
-                    <div className="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>
-                        All 7 tables, performance indexes, automatic timestamp triggers, RLS policies, and full initial seed data will be created instantly.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: CLOUD CONNECTION & SYNC */}
+          
+          {/* TAB 1: CLOUD CONNECTION */}
           {activeTab === 'connect' && (
-            <div className="space-y-5 p-2">
-              <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-slate-900 p-5 rounded-2xl text-white border border-emerald-500/30">
+            <div className="space-y-5">
+              <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 p-5 rounded-2xl text-white border border-emerald-500/30">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
                     <Cloud className="w-5 h-5" />
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-white">
-                      Live Cloud Sync with Supabase
+                      Conexión a Supabase para Sincronización en la Nube
                     </h4>
                     <p className="text-xs text-slate-300">
-                      Connect your Supabase project to automatically persist match plans, players, formations, and SWOT analyses.
+                      Al conectar tu proyecto Supabase, cada vez que pulses el botón <strong>Save</strong> tus cambios se guardan en la nube y se reflejan al instante en cualquier dispositivo.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Status Alert */}
               {saveStatus && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -696,7 +580,7 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Found in Supabase Dashboard &gt; Project Settings &gt; API &gt; Project URL
+                    Encuéntralo en tu Supabase Dashboard &gt; Project Settings &gt; API &gt; Project URL
                   </p>
                 </div>
 
@@ -717,7 +601,7 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Found in Supabase Dashboard &gt; Project Settings &gt; API &gt; Project API keys &gt; anon public
+                    Encuéntralo en tu Supabase Dashboard &gt; Project Settings &gt; API &gt; Project API keys &gt; anon public
                   </p>
                 </div>
 
@@ -728,7 +612,7 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                     className="inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5 mr-1.5" />
-                    Save & Activate Supabase Sync
+                    Guardar y Activar Sincronización Nube
                   </button>
                   {supabaseUrl && (
                     <button
@@ -736,23 +620,195 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                       onClick={handleClearCredentials}
                       className="inline-flex items-center px-3 py-2 text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
                     >
-                      Clear Credentials
+                      Desconectar
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-2">
-                <div className="font-bold text-slate-800 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>How Saving Works in Game Plan HGUFC:</span>
+              {/* Offline Backup Fallback */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Download className="w-4 h-4 text-slate-500" />
+                  Copia de Seguridad Offline (JSON)
+                </h4>
+                <p className="text-xs text-slate-600 mb-3">
+                  También puedes exportar o importar tu informe táctico manualmente para transferirlo entre dispositivos sin internet:
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5 text-slate-600" />
+                    Descargar Plan Táctico (.json)
+                  </button>
+                  <label className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 mr-1.5 text-slate-600" />
+                    Restaurar desde (.json)
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportBackup}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-                <p>
-                  • Clicking the <strong>Save</strong> button in the top navigation bar immediately updates both browser cache and your Supabase PostgreSQL database tables.
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: CROSS-DEVICE SYNC GUIDE */}
+          {activeTab === 'devices' && (
+            <div className="space-y-5">
+              <div className="bg-gradient-to-r from-orange-950 via-slate-900 to-slate-900 p-5 rounded-2xl text-white border border-orange-500/30">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-400/40 flex items-center justify-center text-orange-400 shrink-0">
+                    <Share2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">
+                      ¿Cómo ver los cambios en tu teléfono, tablet u otro ordenador?
+                    </h4>
+                    <p className="text-xs text-slate-300">
+                      Tienes 2 formas sencillas para que tus cambios se vean independientemente del dispositivo utilizado:
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Method 1: Instant Link */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">1</span>
+                    Método 1: Enlace Rápido de Sincronización (1 Clic)
+                  </h4>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                    Recomendado para Móviles
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Copia este enlace y ábrelo en tu teléfono móvil o en el navegador de tu otro dispositivo. Al abrirse, conectará automáticamente la base de datos y cargará todo tu plan táctico:
                 </p>
-                <p>
-                  • All club assets including Hougang United FC&apos;s official crest SVG logo (<span className="font-mono text-[11px] text-slate-700">Wikimedia SVG</span>), match plans, starting lineups, opponent scouting, and 10-phase tactical intelligence are persisted.
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCopySyncLink}
+                    className="inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                  >
+                    {copiedSyncLink ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1.5" />
+                        <span>¡Enlace copiado! Pégalo en tu otro dispositivo</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1.5" />
+                        <span>Copiar Enlace de Sincronización para Otros Dispositivos</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Method 2: Vercel Environment Variables */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-xs">2</span>
+                    Método 2: Sincronización 100% Automática y Permanente en Vercel
+                  </h4>
+                  <span className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
+                    Definitivo
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Para que <strong>cualquier persona o dispositivo</strong> que abra la web en Vercel vea siempre los mismos cambios sin tener que hacer nada:
                 </p>
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs font-mono text-slate-700 space-y-1">
+                  <div>1. Ve a tu proyecto en <strong>Vercel &gt; Settings &gt; Environment Variables</strong></div>
+                  <div>2. Añade la variable: <strong>VITE_SUPABASE_URL</strong> con tu URL de Supabase</div>
+                  <div>3. Añade la variable: <strong>VITE_SUPABASE_ANON_KEY</strong> con tu clave anon</div>
+                  <div>4. Haz clic en <strong>Redeploy</strong> en Vercel</div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Una vez hecho esto, la web desplegada en Vercel leerá directamente la base de datos en todos los dispositivos por defecto.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: SQL SCRIPT */}
+          {activeTab === 'sql' && (
+            <div>
+              <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
+                <span className="flex items-center gap-1.5">
+                  <Terminal className="w-4 h-4 text-orange-600" />
+                  Listo para pegar en el <strong>Supabase SQL Editor</strong> (incluye tabla app_state)
+                </span>
+                <span className="text-slate-500 font-mono text-[11px]">
+                  Archivo: /supabase/schema.sql
+                </span>
+              </div>
+              <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner">
+                <pre className="p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-[500px] leading-relaxed selection:bg-orange-500 selection:text-white">
+                  <code>{SUPABASE_SQL_SCRIPT}</code>
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: VERCEL GUIDE */}
+          {activeTab === 'guide' && (
+            <div className="space-y-4">
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">
+                      Ejecutar el Script SQL en Supabase
+                    </h4>
+                    <p className="text-xs text-slate-600 mb-2">
+                      En <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-orange-600 font-semibold underline inline-flex items-center gap-0.5">supabase.com/dashboard <ExternalLink className="w-3 h-3" /></a>, abre el <strong>SQL Editor</strong>, pega el contenido de la pestaña <strong>Script SQL</strong> y presiona <strong>Run</strong>. Esto creará la tabla <code className="bg-slate-100 px-1 py-0.5 rounded text-orange-600 font-mono">app_state</code> para la sincronización en tiempo real.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">
+                      Conectar en la Aplicación o en Vercel
+                    </h4>
+                    <p className="text-xs text-slate-600 mb-2">
+                      Introduce tu URL y clave en la pestaña <strong>Conectar Supabase</strong> y haz clic en Guardar. O mejor aún, añádelas como variables de entorno en Vercel (<code className="font-mono bg-slate-100 px-1">VITE_SUPABASE_URL</code> y <code className="font-mono bg-slate-100 px-1">VITE_SUPABASE_ANON_KEY</code>).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">
+                      Guardar y Colaborar en Tiempo Real
+                    </h4>
+                    <p className="text-xs text-slate-600 mb-2">
+                      Al pulsar el botón <strong>Save</strong> en la cabecera, la aplicación guarda inmediatamente tanto en tu dispositivo como en Supabase. Si tienes la aplicación abierta en otro dispositivo, se actualizará automáticamente.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -762,14 +818,14 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
         <div className="px-6 py-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Supabase Compatible (PostgreSQL 15+)</span>
+            <span>Compatible con Supabase PostgreSQL 15+ y Vercel</span>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors cursor-pointer"
           >
-            Close
+            Cerrar
           </button>
         </div>
       </div>

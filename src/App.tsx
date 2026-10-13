@@ -22,7 +22,14 @@ import {
   generateMultidimensionalReport 
 } from './services/tacticalEngine';
 import { exportMatchPlanToPdf } from './services/pdfExport';
-import { persistAllData } from './services/supabaseService';
+import { 
+  persistAllData, 
+  loadAllDataFromCloud, 
+  subscribeToRemoteChanges, 
+  checkAndIngestUrlSyncToken, 
+  isSupabaseConfigured, 
+  generateShareableSyncUrl 
+} from './services/supabaseService';
 
 import { Header } from './components/Header';
 import { TacticalPitch } from './components/TacticalPitch';
@@ -131,8 +138,10 @@ export default function App() {
   const [isRivalCustomizerOpen, setIsRivalCustomizerOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
-  // Save State
+  // Cloud & Save State
   const [isSaving, setIsSaving] = useState(false);
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(() => isSupabaseConfigured());
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string>(() => {
     const saved = localStorage.getItem('hgufc_last_saved');
     if (saved) {
@@ -156,6 +165,75 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   }, []);
 
+  // Multi-Device Cloud Synchronization Effect (Runs on Startup & Realtime)
+  useEffect(() => {
+    let isMounted = true;
+    // 1. Ingest any sync token if opened from a shareable device sync link (?supa_sync=...)
+    const fromUrl = checkAndIngestUrlSyncToken();
+    const configured = isSupabaseConfigured();
+    setIsCloudConnected(configured);
+
+    if (fromUrl) {
+      showToast('¡Enlace de sincronización detectado! Conectando a Supabase...', 'info');
+    }
+
+    // 2. If Supabase is configured, pull the latest game plan from the cloud
+    if (configured) {
+      setIsSyncingCloud(true);
+      loadAllDataFromCloud()
+        .then((res) => {
+          if (!isMounted) return;
+          if (res.success && res.data) {
+            const cloud = res.data;
+            if (cloud.players && cloud.players.length > 0) setPlayers(cloud.players);
+            if (cloud.formations && cloud.formations.length > 0) setHgufcFormations(cloud.formations);
+            if (cloud.opponents && cloud.opponents.length > 0) setOpponents(cloud.opponents);
+            if (cloud.matchPlan) {
+              setMatchPlan(prev => ({
+                ...prev,
+                ...cloud.matchPlan,
+                showPitchZones: false, // maintain half-spaces default
+              }));
+            }
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setLastSavedTime(time);
+            showToast('¡Plan táctico cargado y sincronizado desde la nube!', 'success');
+          }
+        })
+        .catch((err) => {
+          console.warn('Initial cloud sync notice:', err);
+        })
+        .finally(() => {
+          if (isMounted) setIsSyncingCloud(false);
+        });
+
+      // 3. Realtime subscription: sync instantly if another device saves
+      const unsubscribe = subscribeToRemoteChanges((remoteData) => {
+        if (!isMounted) return;
+        if (remoteData) {
+          if (remoteData.players && remoteData.players.length > 0) setPlayers(remoteData.players);
+          if (remoteData.formations && remoteData.formations.length > 0) setHgufcFormations(remoteData.formations);
+          if (remoteData.opponents && remoteData.opponents.length > 0) setOpponents(remoteData.opponents);
+          if (remoteData.matchPlan) {
+            setMatchPlan(prev => ({
+              ...prev,
+              ...remoteData.matchPlan,
+              showPitchZones: false,
+            }));
+          }
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setLastSavedTime(time);
+          showToast('Plan táctico actualizado en tiempo real desde otro dispositivo', 'info');
+        }
+      });
+
+      return () => {
+        isMounted = false;
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [showToast]);
+
   // Save All Changes (Supabase + LocalStorage)
   const handleSaveAll = useCallback(async () => {
     setIsSaving(true);
@@ -167,13 +245,26 @@ export default function App() {
         opponents,
       });
       setLastSavedTime(res.timestamp);
-      showToast(res.message, 'success');
+      setIsCloudConnected(isSupabaseConfigured());
+      showToast(res.message, res.savedToSupabase ? 'success' : 'info');
     } catch (err: any) {
-      showToast(`Error saving changes: ${err?.message || 'Check storage'}`, 'error');
+      showToast(`Error guardando cambios: ${err?.message || 'Revisa el almacenamiento'}`, 'error');
     } finally {
       setIsSaving(false);
     }
   }, [players, matchPlan, hgufcFormations, opponents, showToast]);
+
+  // Copy shareable link for mobile / other devices
+  const handleCopySyncLink = useCallback(() => {
+    const link = generateShareableSyncUrl();
+    if (link) {
+      navigator.clipboard.writeText(link);
+      showToast('¡Enlace de sincronización copiado! Ábrelo en tu móvil o tablet', 'success');
+    } else {
+      setIsSupabaseModalOpen(true);
+      showToast('Configura Supabase para generar el enlace de sincronización', 'info');
+    }
+  }, [showToast]);
 
   // Save changes to localStorage
   useEffect(() => {
@@ -621,6 +712,9 @@ export default function App() {
         onSaveAll={handleSaveAll}
         isSaving={isSaving}
         lastSavedTime={lastSavedTime}
+        isCloudConnected={isCloudConnected}
+        isSyncingCloud={isSyncingCloud}
+        onCopySyncLink={handleCopySyncLink}
       />
 
       {/* Primary Navigation Tabs */}
@@ -941,6 +1035,15 @@ export default function App() {
       <SupabaseSqlModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
+        currentData={{
+          players,
+          matchPlan,
+          formations: hgufcFormations,
+          opponents,
+        }}
+        onDataImported={() => {
+          setIsCloudConnected(isSupabaseConfigured());
+        }}
       />
 
       {/* Footer */}
