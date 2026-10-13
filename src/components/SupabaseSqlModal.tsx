@@ -40,8 +40,41 @@ interface SupabaseSqlModalProps {
   };
 }
 
+export const SUPABASE_QUICK_SQL = `-- ==============================================================================
+-- SCRIPT RÁPIDO: CREAR TABLA app_state PARA SINCRONIZACIÓN MULTIDISPOSITIVO
+-- Pega este script en Supabase > SQL Editor > Run
+-- ==============================================================================
+
+-- 1. Crear tabla para almacenar y sincronizar el plan táctico
+CREATE TABLE IF NOT EXISTS public.app_state (
+    key TEXT PRIMARY KEY,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Habilitar seguridad (RLS) y permitir lectura y escritura pública con la Anon Key
+ALTER TABLE public.app_state ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public full access to app_state" ON public.app_state;
+CREATE POLICY "Public full access to app_state" ON public.app_state FOR ALL USING (true) WITH CHECK (true);
+
+-- 3. Habilitar sincronización en tiempo real (Realtime) entre dispositivos
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'app_state'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_state;
+  END IF;
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;
+`;
+
 export const SUPABASE_SQL_SCRIPT = `-- ==============================================================================
--- GAME PLAN HGUFC - SUPABASE DATABASE SCHEMA & MULTI-DEVICE SYNC
+-- GAME PLAN HGUFC - SUPABASE DATABASE SCHEMA & MULTI-DEVICE SYNC (COMPLETO)
 -- Club: Hougang United FC (Singapore Premier League)
 -- Database Engine: PostgreSQL 15+ (Fully Compatible with Supabase)
 -- ==============================================================================
@@ -307,6 +340,7 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'connect' | 'devices' | 'sql' | 'guide'>('connect');
+  const [selectedSqlOption, setSelectedSqlOption] = useState<'quick' | 'full'>('quick');
 
   // Supabase Credentials State
   const [supabaseUrl, setSupabaseUrl] = useState('');
@@ -397,18 +431,20 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({
 
   if (!isOpen) return null;
 
+  const activeSql = selectedSqlOption === 'quick' ? SUPABASE_QUICK_SQL : SUPABASE_SQL_SCRIPT;
+
   const handleCopySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
+    navigator.clipboard.writeText(activeSql);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleDownloadSql = () => {
-    const blob = new Blob([SUPABASE_SQL_SCRIPT], { type: 'text/sql' });
+    const blob = new Blob([activeSql], { type: 'text/sql' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'game_plan_hgufc_supabase.sql';
+    a.download = selectedSqlOption === 'quick' ? 'crear_tabla_app_state.sql' : 'game_plan_hgufc_supabase.sql';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -561,6 +597,45 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({
                   <span>{saveStatus}</span>
                 </div>
               )}
+
+              {/* Important: First time notice about tables */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-900 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 bg-amber-100 rounded-lg text-amber-700 shrink-0 mt-0.5">
+                    <Terminal className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="font-bold text-amber-950 text-sm flex items-center justify-between">
+                      <span>¿No tienes ninguna tabla en Supabase todavía?</span>
+                      <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-extrabold uppercase">
+                        Paso 1
+                      </span>
+                    </div>
+                    <p className="text-amber-800 leading-relaxed">
+                      Es completamente normal: los proyectos recién creados en Supabase están vacíos. Para que tus tácticas se sincronicen entre dispositivos, solo debes crear la tabla <strong>app_state</strong> ejecutando nuestro script (toma menos de 10 segundos).
+                    </p>
+                    <div className="pt-1 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('sql')}
+                        className="inline-flex items-center px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-2xs transition-colors cursor-pointer text-xs"
+                      >
+                        <Copy className="w-3.5 h-3.5 mr-1.5" />
+                        Copiar Script SQL para Supabase
+                      </button>
+                      <a
+                        href="https://supabase.com/dashboard/project/qwvhxygahmjfqxoqvhvy/sql/new"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg transition-colors cursor-pointer text-xs"
+                      >
+                        Abrir Supabase SQL Editor
+                        <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
                 <div>
@@ -742,19 +817,88 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({
 
           {/* TAB 3: SQL SCRIPT */}
           {activeTab === 'sql' && (
-            <div>
-              <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
+            <div className="space-y-4">
+              {/* Step by step guide banner */}
+              <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+                    <Terminal className="w-4 h-4 text-orange-400" />
+                    Pasos para crear la tabla en Supabase (10 Segundos)
+                  </h4>
+                  <a
+                    href="https://supabase.com/dashboard/project/qwvhxygahmjfqxoqvhvy/sql/new"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline"
+                  >
+                    Ir al SQL Editor de Supabase <ExternalLink className="w-3 h-3 ml-1" />
+                  </a>
+                </div>
+                <ol className="text-xs text-slate-300 list-decimal list-inside space-y-1 font-medium">
+                  <li>Haz clic en el botón <strong>"Copiar SQL"</strong> de arriba a la derecha.</li>
+                  <li>Ve a tu proyecto en Supabase y haz clic en <strong>SQL Editor</strong> (icono <code className="text-emerald-300 bg-slate-800 px-1 py-0.5 rounded">&gt;_</code> en la barra izquierda).</li>
+                  <li>Haz clic en <strong>+ New query</strong>, pega el texto y pulsa el botón verde <strong>Run</strong>.</li>
+                </ol>
+              </div>
+
+              {/* Script Type Selector */}
+              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSqlOption('quick')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      selectedSqlOption === 'quick'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    1. Script Rápido (Recomendado - Solo app_state)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSqlOption('full')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      selectedSqlOption === 'full'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    2. Script Completo (Todas las tablas relacionales)
+                  </button>
+                </div>
+                <div className="text-[11px] text-slate-500 hidden sm:block">
+                  {selectedSqlOption === 'quick' ? 'Crea la tabla app_state y activa Realtime' : 'Esquema completo con tablas normalizadas'}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-600">
                 <span className="flex items-center gap-1.5">
                   <Terminal className="w-4 h-4 text-orange-600" />
-                  Listo para pegar en el <strong>Supabase SQL Editor</strong> (incluye tabla app_state)
+                  {selectedSqlOption === 'quick' ? 'Script Rápido: public.app_state' : 'Script Completo: schema.sql'}
                 </span>
-                <span className="text-slate-500 font-mono text-[11px]">
-                  Archivo: /supabase/schema.sql
-                </span>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="inline-flex items-center px-3 py-1 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-lg shadow-2xs cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      ¡Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 mr-1" />
+                      Copiar este script
+                    </>
+                  )}
+                </button>
               </div>
+
               <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner">
-                <pre className="p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-[500px] leading-relaxed selection:bg-orange-500 selection:text-white">
-                  <code>{SUPABASE_SQL_SCRIPT}</code>
+                <pre className="p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-[420px] leading-relaxed selection:bg-orange-500 selection:text-white">
+                  <code>{activeSql}</code>
                 </pre>
               </div>
             </div>
