@@ -43,7 +43,9 @@ import {
   FileCheck, 
   CheckCircle, 
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Download,
+  Printer
 } from 'lucide-react';
 
 const STORAGE_PLAYERS = 'hgufc_squad_v1';
@@ -145,6 +147,7 @@ export default function App() {
 
   // PDF Export state
   const [isExporting, setIsExporting] = useState(false);
+  const [readyPdf, setReadyPdf] = useState<{ blobUrl: string; filename: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // Show Toast
@@ -557,17 +560,17 @@ export default function App() {
     setIsExporting(true);
     showToast('Compiling executive tactical match dossier...', 'info');
     
-    // Temporarily switch or ensure preview element is captured
     const filename = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_${matchPlan.matchDate}.pdf`;
-    const success = await exportMatchPlanToPdf('match-plan-pdf-document', filename, (status) => {
+    const result = await exportMatchPlanToPdf('match-plan-pdf-document', filename, (status) => {
       setToastMessage({ text: status, type: 'info' });
     });
 
     setIsExporting(false);
-    if (success) {
-      showToast('Match plan PDF downloaded successfully!', 'success');
+    if (result.success && result.blobUrl) {
+      setReadyPdf({ blobUrl: result.blobUrl, filename });
+      showToast('Match plan PDF ready! Download started automatically.', 'success');
     } else {
-      showToast('PDF compilation failed. Please try again.', 'error');
+      showToast(result.error || 'PDF compilation failed. Please try again.', 'error');
     }
   };
 
@@ -816,9 +819,19 @@ export default function App() {
 
       </main>
 
-      {/* OFF-SCREEN CAPTURE ELEMENT FOR PDF EXPORT (Always rendered in DOM for html2canvas) */}
+      {/* CAPTURE ELEMENT FOR PDF EXPORT */}
       <div 
-        className="fixed left-[-9999px] top-0 pointer-events-none" 
+        id="match-plan-pdf-document-wrapper"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '840px',
+          zIndex: -9999,
+          pointerEvents: 'none',
+          backgroundColor: '#ffffff',
+          overflow: 'visible',
+        }}
         aria-hidden="true"
       >
         <PrintReportView
@@ -832,6 +845,62 @@ export default function App() {
           report={multidimensionalReport}
         />
       </div>
+
+      {/* Interactive Direct PDF Download Card */}
+      {readyPdf && (
+        <aside 
+          aria-label="PDF Ready Notification"
+          className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-full bg-slate-900 text-white rounded-xl shadow-2xl border-2 border-orange-500 p-4 animate-in fade-in slide-in-from-bottom-5 duration-300"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-600 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow">
+                PDF
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Match Dossier PDF Ready</span>
+                </h4>
+                <p className="text-[11px] text-slate-300 truncate mt-0.5" title={readyPdf.filename}>
+                  {readyPdf.filename}
+                </p>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setReadyPdf(null)}
+              className="text-slate-400 hover:text-white text-sm font-bold p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            <a
+              href={readyPdf.blobUrl}
+              download={readyPdf.filename}
+              className="flex-1 py-2 px-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs rounded-lg text-center shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download PDF File</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              title="Open browser print dialog to save as PDF"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print</span>
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 text-center">
+            If your browser blocked the automatic popup download, click <strong>Download PDF File</strong> above.
+          </p>
+        </aside>
+      )}
 
       {/* Modals */}
       <PlayerModal

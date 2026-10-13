@@ -44,14 +44,14 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
       <div className="border-b-4 border-orange-500 pb-4 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <img 
-              src="/hougang-united-logo.jpg" 
-              alt="Hougang United FC Logo" 
-              className="w-16 h-16 object-contain rounded"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/hougang-united-logo.svg';
-              }}
-            />
+            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-orange-600 to-amber-700 flex flex-col items-center justify-center text-white shadow border border-orange-500 p-1 flex-shrink-0">
+              <span className="text-[10px] font-black tracking-tighter leading-none">HGFC</span>
+              <svg className="w-7 h-7 my-0.5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4zm0 2.18l6 3v4.82c0 4.54-3.14 8.78-6 9.87-2.86-1.09-6-5.33-6-9.87V7.18l6-3z" />
+                <path d="M12 6.5l2.2 4.5h-4.4l2.2-4.5zm0 6.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z" />
+              </svg>
+              <span className="text-[6.5px] font-extrabold uppercase tracking-widest leading-none text-orange-200">CHEETAHS</span>
+            </div>
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-[11px] font-extrabold tracking-widest uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">

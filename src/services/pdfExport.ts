@@ -1,97 +1,163 @@
+import * as htmlToImage from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+
+export interface ExportPdfResult {
+  success: boolean;
+  blobUrl?: string;
+  filename?: string;
+  error?: string;
+}
 
 export async function exportMatchPlanToPdf(
   elementId: string,
   filename: string = 'GamePlan_HGUFC_Match_Plan.pdf',
   onProgress?: (status: string) => void
-): Promise<boolean> {
-  let cloneContainer: HTMLElement | null = null;
+): Promise<ExportPdfResult> {
+  let tempHost: HTMLElement | null = null;
   try {
-    onProgress?.('Preparing tactical document...');
+    onProgress?.('Locating tactical match plan document...');
     const originalElement = document.getElementById(elementId);
     if (!originalElement) {
-      throw new Error(`Export element with ID "${elementId}" not found`);
+      throw new Error(`Export element with ID "${elementId}" not found in DOM`);
     }
 
-    onProgress?.('Setting up document canvas layout...');
+    onProgress?.('Preparing high-fidelity render container...');
 
-    // Create a pristine, non-hidden clone in DOM with standard dimensions
-    // to prevent blank rendering or issues with position/scroll/overflow
-    cloneContainer = document.createElement('div');
-    cloneContainer.style.position = 'absolute';
-    cloneContainer.style.left = '0px';
-    cloneContainer.style.top = '0px';
-    cloneContainer.style.width = '840px';
-    cloneContainer.style.backgroundColor = '#ffffff';
-    cloneContainer.style.zIndex = '-99999';
-    cloneContainer.style.overflow = 'visible';
-    cloneContainer.style.opacity = '1';
-    cloneContainer.style.pointerEvents = 'none';
+    // Create a temporary container on screen so styles and geometry are calculated properly
+    tempHost = document.createElement('div');
+    tempHost.id = 'pdf-export-temp-host';
+    tempHost.style.position = 'fixed';
+    tempHost.style.top = '0';
+    tempHost.style.left = '0';
+    tempHost.style.width = '840px';
+    tempHost.style.zIndex = '99999';
+    tempHost.style.backgroundColor = '#ffffff';
+    tempHost.style.opacity = '1';
+    tempHost.style.pointerEvents = 'none';
+    tempHost.style.overflow = 'visible';
 
-    // Clone target node deeply
-    const clonedNode = originalElement.cloneNode(true) as HTMLElement;
-    clonedNode.style.margin = '0 auto';
-    clonedNode.style.width = '840px';
-    clonedNode.style.backgroundColor = '#ffffff';
-    cloneContainer.appendChild(clonedNode);
-    document.body.appendChild(cloneContainer);
+    // Clone element deeply
+    const cloned = originalElement.cloneNode(true) as HTMLElement;
+    cloned.style.margin = '0 auto';
+    cloned.style.width = '840px';
+    cloned.style.backgroundColor = '#ffffff';
+    cloned.style.display = 'block';
+    cloned.style.visibility = 'visible';
 
-    // Wait a brief tick for fonts/layout to settle
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    tempHost.appendChild(cloned);
+    document.body.appendChild(tempHost);
 
-    onProgress?.('Rendering high-resolution tactical pitch & analysis...');
-    
-    // Create canvas snapshot with robust html2canvas parameters
-    const canvas = await html2canvas(clonedNode, {
-      scale: 2, // High resolution (retina crispness)
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      width: 840,
-      windowWidth: 840,
-      scrollX: 0,
-      scrollY: 0,
-      imageTimeout: 15000,
+    // Give browser brief tick to settle layout & fonts
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    onProgress?.('Rendering tactical report with vector engine...');
+
+    let dataUrl: string | null = null;
+
+    // Primary renderer: html-to-image (Uses native browser SVG foreignObject, 100% compatible with Tailwind v4 & oklch)
+    try {
+      dataUrl = await htmlToImage.toPng(cloned, {
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        pixelRatio: 1.5,
+        cacheBust: true,
+      });
+    } catch (primaryErr) {
+      console.warn('html-to-image failed, trying html2canvas fallback:', primaryErr);
+    }
+
+    // Fallback renderer: html2canvas
+    if (!dataUrl) {
+      onProgress?.('Rendering with canvas fallback...');
+      const canvas = await html2canvas(cloned, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 840,
+        windowWidth: 840,
+      });
+      dataUrl = canvas.toDataURL('image/png');
+    }
+
+    if (!dataUrl) {
+      throw new Error('Could not generate image data for tactical report');
+    }
+
+    onProgress?.('Compiling multi-page A4 PDF dossier...');
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true,
     });
 
-    onProgress?.('Compiling multi-page PDF match dossier...');
-    
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    
-    // Scale image to fit A4 width
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    let heightLeft = imgHeight;
+    const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
+    const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
+
+    const imgProps = pdf.getImageProperties(dataUrl);
+    const totalPdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    let heightLeft = totalPdfHeight;
     let position = 0;
 
-    // First page
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    // Page 1
+    pdf.addImage(dataUrl, 'PNG', 0, position, pdfWidth, totalPdfHeight, undefined, 'FAST');
     heightLeft -= pdfHeight;
 
-    // Additional pages if report exceeds A4 height
+    // Subsequent pages
     while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
+      position -= pdfHeight;
       pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      pdf.addImage(dataUrl, 'PNG', 0, position, pdfWidth, totalPdfHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
     }
 
-    onProgress?.('Downloading PDF...');
-    pdf.save(filename);
-    return true;
-  } catch (error) {
-    console.error('PDF export failed:', error);
-    return false;
+    onProgress?.('Finalizing and initiating download...');
+
+    // Generate binary Blob and Object URL
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+
+    // 1. Attempt standard programmatic <a> download
+    try {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (link.parentNode) link.parentNode.removeChild(link);
+      }, 1000);
+    } catch (err) {
+      console.warn('Programmatic click download error:', err);
+    }
+
+    // 2. Also call pdf.save()
+    try {
+      pdf.save(filename);
+    } catch (saveErr) {
+      console.warn('pdf.save error:', saveErr);
+    }
+
+    return {
+      success: true,
+      blobUrl,
+      filename,
+    };
+  } catch (error: any) {
+    console.error('PDF export process error:', error);
+    return {
+      success: false,
+      error: error?.message || 'Unknown error occurred during PDF export',
+    };
   } finally {
-    if (cloneContainer && cloneContainer.parentNode) {
-      cloneContainer.parentNode.removeChild(cloneContainer);
+    if (tempHost && tempHost.parentNode) {
+      tempHost.parentNode.removeChild(tempHost);
     }
   }
 }
