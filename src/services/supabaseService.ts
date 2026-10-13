@@ -81,6 +81,11 @@ export function checkAndIngestUrlSyncToken(): SupabaseConfig | null {
   return null;
 }
 
+const DEFAULT_SUPABASE_CONFIG: SupabaseConfig = {
+  url: 'https://qwvhxygahmjfqxoqvhvy.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3dmh4eWdhaG1qZnF4b3F2aHZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzY3OTIsImV4cCI6MjEwNzQ1Mjc5Mn0.s3kUhg7KBXVEqQO9HkNoAQJ0177CYEZgXpFWKcYmEGU'
+};
+
 export function getSupabaseConfig(): SupabaseConfig | null {
   try {
     // 1. First check environment variables (Vercel / Vite build-time env)
@@ -106,10 +111,13 @@ export function getSupabaseConfig(): SupabaseConfig | null {
         }
       }
     }
+
+    // 4. Default Project Supabase Config (ensures out-of-the-box cross-device cloud sync)
+    return DEFAULT_SUPABASE_CONFIG;
   } catch (err) {
     console.error('Error reading Supabase credentials:', err);
   }
-  return null;
+  return DEFAULT_SUPABASE_CONFIG;
 }
 
 export function isSupabaseConfigured(): boolean {
