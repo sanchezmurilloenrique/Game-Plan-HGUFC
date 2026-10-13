@@ -52,6 +52,8 @@ export async function exportMatchPlanToPdf(
             backgroundColor: '#ffffff',
             pixelRatio: 2,
             cacheBust: true,
+            width: 794,
+            height: 1122,
           });
         } catch (primaryErr) {
           console.warn(`html-to-image failed on page ${i + 1}, trying html2canvas fallback:`, primaryErr);
@@ -66,6 +68,7 @@ export async function exportMatchPlanToPdf(
             backgroundColor: '#ffffff',
             logging: false,
             width: 794,
+            height: 1122,
           });
           pageDataUrl = canvas.toDataURL('image/png');
         }
