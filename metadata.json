@@ -1,0 +1,6 @@
+{
+  "name": "Game Plan HGUFC",
+  "description": "Professional tactical match preparation, squad roster management, formation analysis, and SWOT intelligence engine for Hougang United FC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
