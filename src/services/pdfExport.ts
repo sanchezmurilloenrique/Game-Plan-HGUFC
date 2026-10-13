@@ -14,7 +14,6 @@ export async function exportMatchPlanToPdf(
   filename: string = 'GamePlan_HGUFC_Match_Plan.pdf',
   onProgress?: (status: string) => void
 ): Promise<ExportPdfResult> {
-  let tempHost: HTMLElement | null = null;
   try {
     onProgress?.('Locating tactical match plan document...');
     const originalElement = document.getElementById(elementId);
@@ -22,71 +21,11 @@ export async function exportMatchPlanToPdf(
       throw new Error(`Export element with ID "${elementId}" not found in DOM`);
     }
 
-    onProgress?.('Preparing high-fidelity render container...');
+    // Wait a brief moment to ensure fonts, DOM nodes and vector paths are fully laid out
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // Create a temporary container on screen so styles and geometry are calculated properly
-    tempHost = document.createElement('div');
-    tempHost.id = 'pdf-export-temp-host';
-    tempHost.style.position = 'fixed';
-    tempHost.style.top = '0';
-    tempHost.style.left = '0';
-    tempHost.style.width = '840px';
-    tempHost.style.zIndex = '99999';
-    tempHost.style.backgroundColor = '#ffffff';
-    tempHost.style.opacity = '1';
-    tempHost.style.pointerEvents = 'none';
-    tempHost.style.overflow = 'visible';
-
-    // Clone element deeply
-    const cloned = originalElement.cloneNode(true) as HTMLElement;
-    cloned.style.margin = '0 auto';
-    cloned.style.width = '840px';
-    cloned.style.backgroundColor = '#ffffff';
-    cloned.style.display = 'block';
-    cloned.style.visibility = 'visible';
-
-    tempHost.appendChild(cloned);
-    document.body.appendChild(tempHost);
-
-    // Give browser brief tick to settle layout & fonts
-    await new Promise((resolve) => setTimeout(resolve, 350));
-
-    onProgress?.('Rendering tactical report with vector engine...');
-
-    let dataUrl: string | null = null;
-
-    // Primary renderer: html-to-image (Uses native browser SVG foreignObject, 100% compatible with Tailwind v4 & oklch)
-    try {
-      dataUrl = await htmlToImage.toPng(cloned, {
-        quality: 0.95,
-        backgroundColor: '#ffffff',
-        pixelRatio: 1.5,
-        cacheBust: true,
-      });
-    } catch (primaryErr) {
-      console.warn('html-to-image failed, trying html2canvas fallback:', primaryErr);
-    }
-
-    // Fallback renderer: html2canvas
-    if (!dataUrl) {
-      onProgress?.('Rendering with canvas fallback...');
-      const canvas = await html2canvas(cloned, {
-        scale: 1.5,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: 840,
-        windowWidth: 840,
-      });
-      dataUrl = canvas.toDataURL('image/png');
-    }
-
-    if (!dataUrl) {
-      throw new Error('Could not generate image data for tactical report');
-    }
-
-    onProgress?.('Compiling multi-page A4 PDF dossier...');
+    // Look for dedicated A4 pages (.pdf-page) inside the document
+    const pageElements = Array.from(originalElement.querySelectorAll<HTMLElement>('.pdf-page'));
 
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -98,22 +37,96 @@ export async function exportMatchPlanToPdf(
     const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
     const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
 
-    const imgProps = pdf.getImageProperties(dataUrl);
-    const totalPdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    if (pageElements.length > 0) {
+      // PAGE-BY-PAGE RENDERING: Guarantees zero text/box slicing across sheets and keeps all headers pristine!
+      for (let i = 0; i < pageElements.length; i++) {
+        const pageEl = pageElements[i];
+        onProgress?.(`Rendering page ${i + 1} of ${pageElements.length}...`);
 
-    let heightLeft = totalPdfHeight;
-    let position = 0;
+        let pageDataUrl: string | null = null;
 
-    // Page 1
-    pdf.addImage(dataUrl, 'PNG', 0, position, pdfWidth, totalPdfHeight, undefined, 'FAST');
-    heightLeft -= pdfHeight;
+        // Primary renderer: html-to-image (Native SVG foreignObject rendering with Tailwind v4 & vector support)
+        try {
+          pageDataUrl = await htmlToImage.toPng(pageEl, {
+            quality: 0.98,
+            backgroundColor: '#ffffff',
+            pixelRatio: 2,
+            cacheBust: true,
+          });
+        } catch (primaryErr) {
+          console.warn(`html-to-image failed on page ${i + 1}, trying html2canvas fallback:`, primaryErr);
+        }
 
-    // Subsequent pages
-    while (heightLeft > 0) {
-      position -= pdfHeight;
-      pdf.addPage();
+        // Fallback renderer: html2canvas
+        if (!pageDataUrl) {
+          const canvas = await html2canvas(pageEl, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: 794,
+          });
+          pageDataUrl = canvas.toDataURL('image/png');
+        }
+
+        if (!pageDataUrl) {
+          throw new Error(`Failed to render page ${i + 1} of tactical dossier`);
+        }
+
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Add page image fitting exact A4 dimensions
+        pdf.addImage(pageDataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      }
+    } else {
+      // Fallback: If no .pdf-page elements found, render entire container
+      onProgress?.('Rendering tactical report with vector engine...');
+      let dataUrl: string | null = null;
+      try {
+        dataUrl = await htmlToImage.toPng(originalElement, {
+          quality: 0.95,
+          backgroundColor: '#ffffff',
+          pixelRatio: 1.5,
+          cacheBust: true,
+        });
+      } catch (err) {
+        console.warn('html-to-image failed, trying html2canvas fallback:', err);
+      }
+
+      if (!dataUrl) {
+        const canvas = await html2canvas(originalElement, {
+          scale: 1.5,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: 794,
+        });
+        dataUrl = canvas.toDataURL('image/png');
+      }
+
+      if (!dataUrl) {
+        throw new Error('Could not generate image data for tactical report');
+      }
+
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const totalPdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      let heightLeft = totalPdfHeight;
+      let position = 0;
+
       pdf.addImage(dataUrl, 'PNG', 0, position, pdfWidth, totalPdfHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position -= pdfHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, pdfWidth, totalPdfHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
+      }
     }
 
     onProgress?.('Finalizing and initiating download...');
@@ -122,7 +135,7 @@ export async function exportMatchPlanToPdf(
     const blob = pdf.output('blob');
     const blobUrl = URL.createObjectURL(blob);
 
-    // 1. Attempt standard programmatic <a> download
+    // 1. Attempt programmatic <a> download
     try {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -155,9 +168,5 @@ export async function exportMatchPlanToPdf(
       success: false,
       error: error?.message || 'Unknown error occurred during PDF export',
     };
-  } finally {
-    if (tempHost && tempHost.parentNode) {
-      tempHost.parentNode.removeChild(tempHost);
-    }
   }
 }

@@ -800,8 +800,8 @@ export default function App() {
               </button>
             </div>
 
-            <div className="bg-slate-200/80 p-4 sm:p-6 rounded-xl overflow-x-auto flex justify-center">
-              <div className="shadow-2xl rounded-lg overflow-hidden bg-white">
+            <div className="bg-slate-300/60 p-4 sm:p-6 rounded-xl overflow-x-auto flex justify-center">
+              <div className="max-w-[800px] w-full flex flex-col items-center">
                 <PrintReportView
                   id="match-plan-pdf-document-preview"
                   matchPlan={matchPlan}
@@ -826,7 +826,7 @@ export default function App() {
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '840px',
+          width: '794px',
           zIndex: -9999,
           pointerEvents: 'none',
           backgroundColor: '#ffffff',
