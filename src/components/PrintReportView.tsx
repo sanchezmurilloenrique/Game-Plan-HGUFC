@@ -37,11 +37,11 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <img 
-              src="HGFC.png" 
+              src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
               alt="Hougang United FC Logo" 
               className="w-16 h-16 object-contain"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = '/HGFC.png';
+                (e.target as HTMLImageElement).src = '/hougang-united-logo.svg';
               }}
             />
             <div>

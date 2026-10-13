@@ -41,6 +41,20 @@ $$ language 'plpgsql';
 -- 4. TABLES DEFINITION
 -- ==============================================================================
 
+-- TABLE: club_profile (Hougang United FC Official Club Identity & Branding)
+CREATE TABLE IF NOT EXISTS public.club_profile (
+    id TEXT PRIMARY KEY DEFAULT 'club-hgufc',
+    name VARCHAR(120) NOT NULL DEFAULT 'Hougang United Football Club',
+    short_name VARCHAR(50) NOT NULL DEFAULT 'Hougang United FC',
+    logo_url TEXT NOT NULL DEFAULT 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original',
+    primary_color VARCHAR(20) NOT NULL DEFAULT '#EA580C',
+    secondary_color VARCHAR(20) DEFAULT '#FFFFFF',
+    stadium VARCHAR(120) DEFAULT 'Jalan Besar Stadium',
+    league VARCHAR(100) DEFAULT 'Singapore Premier League (SPL)',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- TABLE: players (HGUFC Squad Roster - 30 Players)
 CREATE TABLE IF NOT EXISTS public.players (
     id TEXT PRIMARY KEY DEFAULT 'p-' || gen_random_uuid()::text,
@@ -180,9 +194,13 @@ CREATE TRIGGER trg_swot_updated_at BEFORE UPDATE ON public.swot_analyses FOR EAC
 DROP TRIGGER IF EXISTS trg_instructions_updated_at ON public.tactical_instructions;
 CREATE TRIGGER trg_instructions_updated_at BEFORE UPDATE ON public.tactical_instructions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_club_profile_updated_at ON public.club_profile;
+CREATE TRIGGER trg_club_profile_updated_at BEFORE UPDATE ON public.club_profile FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ==============================================================================
 -- 7. ROW LEVEL SECURITY (RLS) POLICIES FOR SUPABASE
 -- ==============================================================================
+ALTER TABLE public.club_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.formations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.opponents ENABLE ROW LEVEL SECURITY;
@@ -192,6 +210,9 @@ ALTER TABLE public.swot_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tactical_instructions ENABLE ROW LEVEL SECURITY;
 
 -- Allow public and authenticated clients full access for coaches collaboration
+DROP POLICY IF EXISTS "Public full access to club_profile" ON public.club_profile;
+CREATE POLICY "Public full access to club_profile" ON public.club_profile FOR ALL USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Public full access to players" ON public.players;
 CREATE POLICY "Public full access to players" ON public.players FOR ALL USING (true) WITH CHECK (true);
 
@@ -446,3 +467,10 @@ INSERT INTO public.tactical_instructions (id, match_plan_id, build_up_phase, in_
  'Maintain a strict 3+2 rest-defense structure (both CBs + opposite fullback tucking inside + holding pivot) to eliminate central counter-attack pathways.',
  'Inswinging delivery targeting the near post flick-on for our trailing central defender. Form 3-man boundary outside the 18-yard box to win the second ball.')
 ON CONFLICT (id) DO NOTHING;
+
+-- 8.8 HOUGANG UNITED FC OFFICIAL CLUB PROFILE SEED
+INSERT INTO public.club_profile (id, name, short_name, logo_url, primary_color, secondary_color, stadium, league) VALUES
+('club-hgufc', 'Hougang United Football Club', 'Hougang United FC', 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original', '#EA580C', '#FFFFFF', 'Jalan Besar Stadium', 'Singapore Premier League (SPL)')
+ON CONFLICT (id) DO UPDATE SET
+    logo_url = EXCLUDED.logo_url,
+    updated_at = NOW();

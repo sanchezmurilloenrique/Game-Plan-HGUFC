@@ -47,14 +47,13 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Brand & Emblem */}
           <div className="flex items-center space-x-3.5">
-            <div className="relative w-12 h-12 flex-shrink-0 bg-orange-50 rounded-full p-1 border-2 border-orange-500 shadow-sm flex items-center justify-center">
+            <div className="relative w-12 h-12 flex-shrink-0 bg-white rounded-full p-1 border-2 border-orange-500 shadow-sm flex items-center justify-center">
               <img 
-                src="HGFC.png" 
+                src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
                 alt="Hougang United FC Logo" 
                 className="w-10 h-10 object-contain rounded-full"
                 onError={(e) => {
-                  // Fallback if relative path behaves differently
-                  (e.target as HTMLImageElement).src = '/HGFC.png';
+                  (e.target as HTMLImageElement).src = '/hougang-united-logo.svg';
                 }}
               />
             </div>
@@ -154,7 +153,12 @@ export const Header: React.FC<HeaderProps> = ({
             
             {/* HGUFC Side */}
             <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
+                alt="HGUFC Crest" 
+                className="w-4 h-4 object-contain rounded-full" 
+                onError={(e) => { (e.target as HTMLImageElement).src = '/hougang-united-logo.svg'; }}
+              />
               <span className="font-bold text-orange-400">HGUFC</span>
               <select
                 aria-label="Hougang United FC Formation"

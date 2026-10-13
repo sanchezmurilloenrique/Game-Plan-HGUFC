@@ -675,7 +675,12 @@ export const TacticalPitch: React.FC<TacticalPitchProps> = ({
             <span>{opponent.name.toUpperCase()} (ATTACKING DOWN)</span>
           </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-orange-600/95 backdrop-blur-md text-white text-[11px] font-black px-4 py-1 rounded-full z-15 tracking-wider border border-orange-400 shadow-xl flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-white"></span>
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
+              alt="HGUFC Crest" 
+              className="w-3.5 h-3.5 object-contain rounded-full bg-white/20 p-0.5" 
+              onError={(e) => { (e.target as HTMLImageElement).src = '/hougang-united-logo.svg'; }}
+            />
             <span>HOUGANG UNITED FC (ATTACKING UP)</span>
           </div>
 

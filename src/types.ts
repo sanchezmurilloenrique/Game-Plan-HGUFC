@@ -54,6 +54,19 @@ export interface OpponentTeam {
   players?: OpponentPlayer[];
 }
 
+export interface ClubProfile {
+  id: string;
+  name: string;
+  shortName: string;
+  code: string;
+  logoUrl: string;
+  localLogoUrl?: string;
+  primaryColor: string;
+  secondaryColor: string;
+  stadium: string;
+  league: string;
+}
+
 export interface SwotData {
   ourStrengths: string;
   ourWeaknesses: string;

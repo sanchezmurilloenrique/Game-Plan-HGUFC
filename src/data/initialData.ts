@@ -1,4 +1,17 @@
-import { Player, Formation, OpponentTeam, SwotData, TacticalNotes, OpponentPlayer } from '../types';
+import { Player, Formation, OpponentTeam, SwotData, TacticalNotes, OpponentPlayer, ClubProfile } from '../types';
+
+export const HGUFC_CLUB_PROFILE: ClubProfile = {
+  id: 'club-hgufc',
+  name: 'Hougang United Football Club',
+  shortName: 'Hougang United FC',
+  code: 'HGUFC',
+  primaryColor: '#EA580C',
+  secondaryColor: '#1E293B',
+  logoUrl: 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original',
+  localLogoUrl: '/hougang-united-logo.svg',
+  stadium: 'Jalan Besar Stadium',
+  league: 'Singapore Premier League (SPL)',
+};
 
 export const INITIAL_PLAYERS: Player[] = [
   // 3 Goalkeepers (Distinct GK Styling)

@@ -48,6 +48,20 @@ $$ language 'plpgsql';
 -- 4. TABLES DEFINITION
 -- ==============================================================================
 
+-- TABLE: club_profile (Hougang United FC Official Club Identity & Branding)
+CREATE TABLE IF NOT EXISTS public.club_profile (
+    id TEXT PRIMARY KEY DEFAULT 'club-hgufc',
+    name VARCHAR(120) NOT NULL DEFAULT 'Hougang United Football Club',
+    short_name VARCHAR(50) NOT NULL DEFAULT 'Hougang United FC',
+    logo_url TEXT NOT NULL DEFAULT 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original',
+    primary_color VARCHAR(20) NOT NULL DEFAULT '#EA580C',
+    secondary_color VARCHAR(20) DEFAULT '#FFFFFF',
+    stadium VARCHAR(120) DEFAULT 'Jalan Besar Stadium',
+    league VARCHAR(100) DEFAULT 'Singapore Premier League (SPL)',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- TABLE: players (HGUFC Squad Roster - 30 Players)
 CREATE TABLE IF NOT EXISTS public.players (
     id TEXT PRIMARY KEY DEFAULT 'p-' || gen_random_uuid()::text,
@@ -187,9 +201,13 @@ CREATE TRIGGER trg_swot_updated_at BEFORE UPDATE ON public.swot_analyses FOR EAC
 DROP TRIGGER IF EXISTS trg_instructions_updated_at ON public.tactical_instructions;
 CREATE TRIGGER trg_instructions_updated_at BEFORE UPDATE ON public.tactical_instructions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_club_profile_updated_at ON public.club_profile;
+CREATE TRIGGER trg_club_profile_updated_at BEFORE UPDATE ON public.club_profile FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ==============================================================================
 -- 7. ROW LEVEL SECURITY (RLS) POLICIES FOR SUPABASE
 -- ==============================================================================
+ALTER TABLE public.club_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.formations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.opponents ENABLE ROW LEVEL SECURITY;
@@ -197,6 +215,9 @@ ALTER TABLE public.opponent_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.swot_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tactical_instructions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public full access to club_profile" ON public.club_profile;
+CREATE POLICY "Public full access to club_profile" ON public.club_profile FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public full access to players" ON public.players;
 CREATE POLICY "Public full access to players" ON public.players FOR ALL USING (true) WITH CHECK (true);
@@ -218,6 +239,16 @@ CREATE POLICY "Public full access to swot_analyses" ON public.swot_analyses FOR 
 
 DROP POLICY IF EXISTS "Public full access to tactical_instructions" ON public.tactical_instructions;
 CREATE POLICY "Public full access to tactical_instructions" ON public.tactical_instructions FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 8. INITIAL SEED DATA
+-- ==============================================================================
+-- 8.1 HOUGANG UNITED FC OFFICIAL CLUB PROFILE SEED
+INSERT INTO public.club_profile (id, name, short_name, logo_url, primary_color, secondary_color, stadium, league) VALUES
+('club-hgufc', 'Hougang United Football Club', 'Hougang United FC', 'https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original', '#EA580C', '#FFFFFF', 'Jalan Besar Stadium', 'Singapore Premier League (SPL)')
+ON CONFLICT (id) DO UPDATE SET
+    logo_url = EXCLUDED.logo_url,
+    updated_at = NOW();
 `;
 
 export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onClose }) => {
@@ -303,7 +334,7 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Table Architecture (7 Tables)
+              Table Architecture (8 Tables)
             </button>
             <button
               type="button"
@@ -370,6 +401,28 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
 
           {activeTab === 'tables' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-orange-600"></span>
+                    public.club_profile
+                  </h4>
+                  <span className="text-[10px] bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">
+                    Club Identity & Crest
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mb-2">
+                  Stores Hougang United FC identity, official SVG crest logo URL, club colors, and home stadium.
+                </p>
+                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 space-y-0.5">
+                  <div>• id (TEXT, PK, 'club-hgufc')</div>
+                  <div>• name, short_name ('Hougang United FC')</div>
+                  <div>• logo_url (Official Wikimedia SVG)</div>
+                  <div>• primary_color (#EA580C), secondary_color (#FFFFFF)</div>
+                  <div>• stadium, league ('SPL')</div>
+                </div>
+              </div>
+
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">

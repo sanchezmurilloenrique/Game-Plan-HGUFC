@@ -102,12 +102,27 @@ export const SquadRoster: React.FC<SquadRosterProps> = ({
       {/* Roster Header */}
       <div className="p-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
-            rosterTeam === 'hgufc' ? 'bg-orange-600' : 'bg-slate-800'
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-xs overflow-hidden p-0.5 ${
+            rosterTeam === 'hgufc' ? 'bg-white border border-orange-400' : 'bg-slate-800'
           }`}
           style={rosterTeam === 'rival' && opponent?.primaryColor ? { backgroundColor: opponent.primaryColor } : {}}
           >
-            {rosterTeam === 'hgufc' ? <Users className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+            {rosterTeam === 'hgufc' ? (
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
+                alt="HGUFC Crest" 
+                className="w-6 h-6 object-contain" 
+                onError={(e) => { (e.target as HTMLImageElement).src = '/hougang-united-logo.svg'; }}
+              />
+            ) : opponent?.logoUrl ? (
+              <img 
+                src={opponent.logoUrl} 
+                alt={opponent.name} 
+                className="w-6 h-6 object-cover rounded-full" 
+              />
+            ) : (
+              <Shield className="w-4 h-4" />
+            )}
           </div>
           <div>
             <h2 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
