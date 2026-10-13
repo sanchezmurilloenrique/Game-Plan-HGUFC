@@ -102,7 +102,8 @@ export function generateMultidimensionalReport(
   const rivalStriker = rivalSquad.find(p => p.position === 'FWD') || { name: `${opponent.shortName} Leading Striker`, number: 9 };
   const rivalMid = rivalSquad.find(p => p.position === 'MID') || { name: `${opponent.shortName} Central Pivot`, number: 8 };
   const rivalCB = rivalSquad.find(p => p.position === 'DEF') || { name: `${opponent.shortName} Center-Back`, number: 4 };
-  const rivalWinger = rivalSquad.find(p => p.position === 'FWD' && p.id !== rivalStriker.id) || { name: `${opponent.shortName} Wide Threat`, number: 7 };
+  const rivalStrikerId = 'id' in rivalStriker ? rivalStriker.id : undefined;
+  const rivalWinger = rivalSquad.find(p => p.position === 'FWD' && (rivalStrikerId ? p.id !== rivalStrikerId : true)) || { name: `${opponent.shortName} Wide Threat`, number: 7 };
 
   // User SWOT observations
   const ourStr = cleanText(swot.ourStrengths);
