@@ -22,6 +22,7 @@ import {
   generateMultidimensionalReport 
 } from './services/tacticalEngine';
 import { exportMatchPlanToPdf } from './services/pdfExport';
+import { persistAllData } from './services/supabaseService';
 
 import { Header } from './components/Header';
 import { TacticalPitch } from './components/TacticalPitch';
@@ -87,7 +88,14 @@ export default function App() {
   const [matchPlan, setMatchPlan] = useState<MatchPlan>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_MATCHPLAN);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Default half-spaces to unchecked as requested
+        return {
+          ...parsed,
+          showPitchZones: false,
+        };
+      }
     } catch (e) {
       console.error(e);
     }
@@ -101,7 +109,7 @@ export default function App() {
       rivalFormationId: 'form-433',
       tacticalNotes: INITIAL_TACTICAL_NOTES,
       swot: INITIAL_SWOT,
-      showPitchZones: true,
+      showPitchZones: false,
       showOpponentTokens: true,
       activePitchTool: 'select',
     };
@@ -110,7 +118,7 @@ export default function App() {
   // Active Main Tab
   const [activeTab, setActiveTab] = useState<'board' | 'swot' | 'instructions' | 'preview'>('board');
   const [activePitchView, setActivePitchView] = useState<'both' | 'hgufc' | 'opponent'>('both');
-  const [showPitchZones, setShowPitchZones] = useState<boolean>(true);
+  const [showPitchZones, setShowPitchZones] = useState<boolean>(false);
   const [isPitchExpanded, setIsPitchExpanded] = useState<boolean>(false);
 
   // Modals state
@@ -121,6 +129,20 @@ export default function App() {
   const [isRivalCustomizerOpen, setIsRivalCustomizerOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
+  // Save State
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string>(() => {
+    const saved = localStorage.getItem('hgufc_last_saved');
+    if (saved) {
+      try {
+        return new Date(saved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  });
+
   // PDF Export state
   const [isExporting, setIsExporting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -130,6 +152,25 @@ export default function App() {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 3500);
   }, []);
+
+  // Save All Changes (Supabase + LocalStorage)
+  const handleSaveAll = useCallback(async () => {
+    setIsSaving(true);
+    try {
+      const res = await persistAllData({
+        players,
+        matchPlan,
+        formations: hgufcFormations,
+        opponents,
+      });
+      setLastSavedTime(res.timestamp);
+      showToast(res.message, 'success');
+    } catch (err: any) {
+      showToast(`Error saving changes: ${err?.message || 'Check storage'}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [players, matchPlan, hgufcFormations, opponents, showToast]);
 
   // Save changes to localStorage
   useEffect(() => {
@@ -574,6 +615,9 @@ export default function App() {
         onExportPdf={handleExportPdf}
         onResetData={handleResetData}
         isExporting={isExporting}
+        onSaveAll={handleSaveAll}
+        isSaving={isSaving}
+        lastSavedTime={lastSavedTime}
       />
 
       {/* Primary Navigation Tabs */}

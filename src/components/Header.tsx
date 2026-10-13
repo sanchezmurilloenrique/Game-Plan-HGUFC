@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Users, Shield, Layers, RefreshCw, Calendar, MapPin, Trophy, Database } from 'lucide-react';
+import { Download, Users, Shield, Layers, RefreshCw, Calendar, MapPin, Trophy, Database, Save, Loader2 } from 'lucide-react';
 import { MatchPlan, OpponentTeam, Formation } from '../types';
 
 interface HeaderProps {
@@ -17,6 +17,9 @@ interface HeaderProps {
   isExporting: boolean;
   onOpenRivalCustomizer?: () => void;
   onUpdateOpponentColor?: (color: string) => void;
+  onSaveAll?: () => void;
+  isSaving?: boolean;
+  lastSavedTime?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,6 +37,9 @@ export const Header: React.FC<HeaderProps> = ({
   isExporting,
   onOpenRivalCustomizer,
   onUpdateOpponentColor,
+  onSaveAll,
+  isSaving = false,
+  lastSavedTime,
 }) => {
   const currentOpponent = opponents.find(o => o.id === matchPlan.selectedOpponentId) || opponents[0];
   const currentHgFormation = hgufcFormations.find(f => f.id === matchPlan.hgufcFormationId);
@@ -107,6 +113,37 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
+            {/* Prominent Save Button */}
+            {onSaveAll && (
+              <button
+                type="button"
+                onClick={onSaveAll}
+                disabled={isSaving}
+                className="inline-flex items-center px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg shadow-xs hover:shadow transition-all disabled:opacity-75 cursor-pointer"
+                title="Save all changes to Supabase & local storage"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                    <span>Save</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Last Saved Badge */}
+            {lastSavedTime && (
+              <span className="hidden sm:inline-flex items-center text-[11px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                <span>Saved: {lastSavedTime}</span>
+              </span>
+            )}
+
             {/* Supabase Database SQL Modal */}
             {onOpenSupabaseSql && (
               <button
@@ -116,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title="View and Copy Supabase Database Schema & Tables SQL"
               >
                 <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                <span>Supabase SQL</span>
+                <span>Supabase</span>
               </button>
             )}
 

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Copy, Check, Download, Database, ExternalLink, Terminal, ShieldCheck, Sparkles, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Copy, Check, Download, Database, ExternalLink, Terminal, ShieldCheck, Sparkles, Layers, Key, Link as LinkIcon, Cloud, CheckCircle2, AlertCircle, Save } from 'lucide-react';
+import { getSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig, getSupabaseClient } from '../services/supabaseService';
 
 interface SupabaseSqlModalProps {
   isOpen: boolean;
@@ -253,7 +254,41 @@ ON CONFLICT (id) DO UPDATE SET
 
 export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'sql' | 'guide' | 'tables'>('sql');
+  const [activeTab, setActiveTab] = useState<'sql' | 'guide' | 'tables' | 'connect'>('sql');
+
+  // Supabase Credentials State
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    if (config) {
+      setSupabaseUrl(config.url);
+      setSupabaseKey(config.anonKey);
+    }
+  }, []);
+
+  const handleSaveCredentials = () => {
+    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
+      setSaveStatus('Please enter both Supabase URL and Anon Key');
+      return;
+    }
+    saveSupabaseConfig({
+      url: supabaseUrl.trim(),
+      anonKey: supabaseKey.trim(),
+    });
+    setSaveStatus('Credentials saved successfully! You can now use the Save button to sync.');
+    setTimeout(() => setSaveStatus(null), 3000);
+  };
+
+  const handleClearCredentials = () => {
+    clearSupabaseConfig();
+    setSupabaseUrl('');
+    setSupabaseKey('');
+    setSaveStatus('Credentials cleared.');
+    setTimeout(() => setSaveStatus(null), 3000);
+  };
 
   if (!isOpen) return null;
 
@@ -346,6 +381,17 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
               }`}
             >
               Setup Guide (3 Steps)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('connect')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                activeTab === 'connect'
+                  ? 'bg-white text-emerald-600 shadow-xs border border-emerald-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Cloud Connection & Sync
             </button>
           </div>
 
@@ -601,6 +647,112 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({ isOpen, onCl
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: CLOUD CONNECTION & SYNC */}
+          {activeTab === 'connect' && (
+            <div className="space-y-5 p-2">
+              <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-slate-900 p-5 rounded-2xl text-white border border-emerald-500/30">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                    <Cloud className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">
+                      Live Cloud Sync with Supabase
+                    </h4>
+                    <p className="text-xs text-slate-300">
+                      Connect your Supabase project to automatically persist match plans, players, formations, and SWOT analyses.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Alert */}
+              {saveStatus && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{saveStatus}</span>
+                </div>
+              )}
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Supabase Project URL
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <LinkIcon className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="url"
+                      value={supabaseUrl}
+                      onChange={(e) => setSupabaseUrl(e.target.value)}
+                      placeholder="https://xyzcompany.supabase.co"
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Found in Supabase Dashboard &gt; Project Settings &gt; API &gt; Project URL
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Supabase Anon Public API Key
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="password"
+                      value={supabaseKey}
+                      onChange={(e) => setSupabaseKey(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Found in Supabase Dashboard &gt; Project Settings &gt; API &gt; Project API keys &gt; anon public
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveCredentials}
+                    className="inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                    Save & Activate Supabase Sync
+                  </button>
+                  {supabaseUrl && (
+                    <button
+                      type="button"
+                      onClick={handleClearCredentials}
+                      className="inline-flex items-center px-3 py-2 text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Clear Credentials
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-2">
+                <div className="font-bold text-slate-800 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>How Saving Works in Game Plan HGUFC:</span>
+                </div>
+                <p>
+                  • Clicking the <strong>Save</strong> button in the top navigation bar immediately updates both browser cache and your Supabase PostgreSQL database tables.
+                </p>
+                <p>
+                  • All club assets including Hougang United FC&apos;s official crest SVG logo (<span className="font-mono text-[11px] text-slate-700">Wikimedia SVG</span>), match plans, starting lineups, opponent scouting, and 10-phase tactical intelligence are persisted.
+                </p>
               </div>
             </div>
           )}
