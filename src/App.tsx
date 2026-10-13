@@ -800,12 +800,14 @@ export default function App() {
             <div className="bg-slate-200/80 p-4 sm:p-6 rounded-xl overflow-x-auto flex justify-center">
               <div className="shadow-2xl rounded-lg overflow-hidden bg-white">
                 <PrintReportView
+                  id="match-plan-pdf-document-preview"
                   matchPlan={matchPlan}
                   hgufcFormation={currentHgufcFormation}
                   rivalFormation={currentRivalFormation}
                   opponent={currentOpponent}
                   players={players}
                   insights={tacticalInsights}
+                  report={multidimensionalReport}
                 />
               </div>
             </div>
@@ -820,12 +822,14 @@ export default function App() {
         aria-hidden="true"
       >
         <PrintReportView
+          id="match-plan-pdf-document"
           matchPlan={matchPlan}
           hgufcFormation={currentHgufcFormation}
           rivalFormation={currentRivalFormation}
           opponent={currentOpponent}
           players={players}
           insights={tacticalInsights}
+          report={multidimensionalReport}
         />
       </div>
 

@@ -6,30 +6,57 @@ export async function exportMatchPlanToPdf(
   filename: string = 'GamePlan_HGUFC_Match_Plan.pdf',
   onProgress?: (status: string) => void
 ): Promise<boolean> {
+  let cloneContainer: HTMLElement | null = null;
   try {
     onProgress?.('Preparing tactical document...');
-    const element = document.getElementById(elementId);
-    if (!element) {
+    const originalElement = document.getElementById(elementId);
+    if (!originalElement) {
       throw new Error(`Export element with ID "${elementId}" not found`);
     }
 
-    // Scroll to top to ensure clean rendering
-    window.scrollTo(0, 0);
+    onProgress?.('Setting up document canvas layout...');
+
+    // Create a pristine, non-hidden clone in DOM with standard dimensions
+    // to prevent blank rendering or issues with position/scroll/overflow
+    cloneContainer = document.createElement('div');
+    cloneContainer.style.position = 'absolute';
+    cloneContainer.style.left = '0px';
+    cloneContainer.style.top = '0px';
+    cloneContainer.style.width = '840px';
+    cloneContainer.style.backgroundColor = '#ffffff';
+    cloneContainer.style.zIndex = '-99999';
+    cloneContainer.style.overflow = 'visible';
+    cloneContainer.style.opacity = '1';
+    cloneContainer.style.pointerEvents = 'none';
+
+    // Clone target node deeply
+    const clonedNode = originalElement.cloneNode(true) as HTMLElement;
+    clonedNode.style.margin = '0 auto';
+    clonedNode.style.width = '840px';
+    clonedNode.style.backgroundColor = '#ffffff';
+    cloneContainer.appendChild(clonedNode);
+    document.body.appendChild(cloneContainer);
+
+    // Wait a brief tick for fonts/layout to settle
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     onProgress?.('Rendering high-resolution tactical pitch & analysis...');
     
-    // Create canvas snapshot
-    const canvas = await html2canvas(element, {
+    // Create canvas snapshot with robust html2canvas parameters
+    const canvas = await html2canvas(clonedNode, {
       scale: 2, // High resolution (retina crispness)
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight,
+      width: 840,
+      windowWidth: 840,
+      scrollX: 0,
+      scrollY: 0,
+      imageTimeout: 15000,
     });
 
-    onProgress?.('Compiling PDF match dossier...');
+    onProgress?.('Compiling multi-page PDF match dossier...');
     
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -37,6 +64,7 @@ export async function exportMatchPlanToPdf(
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
     
+    // Scale image to fit A4 width
     const imgWidth = pdfWidth;
     const imgHeight = (canvas.height * pdfWidth) / canvas.width;
     
@@ -61,5 +89,9 @@ export async function exportMatchPlanToPdf(
   } catch (error) {
     console.error('PDF export failed:', error);
     return false;
+  } finally {
+    if (cloneContainer && cloneContainer.parentNode) {
+      cloneContainer.parentNode.removeChild(cloneContainer);
+    }
   }
 }

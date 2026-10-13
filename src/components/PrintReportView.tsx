@@ -1,45 +1,53 @@
 import React from 'react';
-import { MatchPlan, Player, Formation, OpponentTeam, GeneratedInsight } from '../types';
+import { MatchPlan, Player, Formation, OpponentTeam, GeneratedInsight, MultidimensionalReport } from '../types';
 
 interface PrintReportViewProps {
+  id?: string;
   matchPlan: MatchPlan;
   hgufcFormation: Formation;
   rivalFormation: Formation;
   opponent: OpponentTeam;
   players: Player[];
   insights: GeneratedInsight[];
+  report?: MultidimensionalReport;
 }
 
 export const PrintReportView: React.FC<PrintReportViewProps> = ({
+  id = 'match-plan-pdf-document',
   matchPlan,
   hgufcFormation,
   rivalFormation,
   opponent,
   players,
   insights,
+  report,
 }) => {
   const startingXI = players.filter(p => p.pitchX !== undefined && p.pitchY !== undefined);
   const bench = players.filter(p => p.pitchX === undefined || p.pitchY === undefined);
 
-  const opportunities = insights.filter(i => i.type === 'opportunity').slice(0, 4);
-  const threats = insights.filter(i => i.type === 'threat').slice(0, 4);
+  const opportunities = insights.filter(i => i.type === 'opportunity');
+  const threats = insights.filter(i => i.type === 'threat');
 
   return (
     <div 
-      id="match-plan-pdf-document"
-      className="bg-white text-slate-900 p-8 w-[840px] mx-auto text-xs leading-normal"
+      id={id}
+      className="bg-white text-slate-900 p-8 w-[840px] mx-auto text-xs leading-normal print:w-full print:p-0"
       style={{
-        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+        fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        color: '#0f172a',
+        backgroundColor: '#ffffff',
       }}
     >
-      {/* ================= PAGE 1: MATCH HEADER & TACTICAL BOARD ================= */}
+      {/* =========================================================================
+          PAGE 1: MATCH HEADER & TACTICAL BOARD + STARTING LINEUP
+          ========================================================================= */}
       <div className="border-b-4 border-orange-500 pb-4 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <img 
-              src="https://upload.wikimedia.org/wikipedia/en/a/a6/Hougang_United_FC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" 
+              src="/hougang-united-logo.jpg" 
               alt="Hougang United FC Logo" 
-              className="w-16 h-16 object-contain"
+              className="w-16 h-16 object-contain rounded"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/hougang-united-logo.svg';
               }}
@@ -66,6 +74,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
             <p><span className="font-bold text-slate-900">Date:</span> {matchPlan.matchDate || 'Matchday'}</p>
             <p><span className="font-bold text-slate-900">Venue:</span> {opponent.stadium || 'Jalan Besar Stadium'}</p>
             <p><span className="font-bold text-slate-900">Tactical Clash:</span> {hgufcFormation.name} vs {rivalFormation.name}</p>
+            <p><span className="font-bold text-slate-900">Competition:</span> {matchPlan.competition || 'Singapore Premier League'}</p>
           </div>
         </div>
       </div>
@@ -74,8 +83,9 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
       <div className="grid grid-cols-12 gap-5 mb-6">
         
         {/* Tactical Pitch (Left 7 Cols) */}
-        <div className="col-span-7 bg-emerald-900 rounded-lg p-2.5 border-2 border-emerald-950 shadow-sm">
-          <div className="relative w-full h-[440px] rounded border-2 border-white/90 overflow-hidden"
+        <div className="col-span-7 bg-emerald-900 rounded-lg p-2.5 border-2 border-emerald-950 shadow-xs">
+          <div 
+            className="relative w-full h-[450px] rounded border-2 border-white/90 overflow-hidden"
             style={{
               background: 'linear-gradient(to bottom, #15803d 0%, #166534 100%)',
             }}
@@ -94,22 +104,22 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
               <circle cx="50" cy="50" r="10" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
               <circle cx="50" cy="50" r="0.8" fill="#ffffff" opacity="0.9" />
 
-              {/* Top goal */}
+              {/* Top goal (Rival) */}
               <rect x="22" y="2" width="56" height="17" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
               <rect x="36" y="2" width="28" height="6" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
               <path d="M 40 19 A 9 9 0 0 0 60 19" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
 
-              {/* Bottom goal */}
+              {/* Bottom goal (HGUFC) */}
               <rect x="22" y="81" width="56" height="17" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
               <rect x="36" y="92" width="28" height="6" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
               <path d="M 40 81 A 9 9 0 0 1 60 81" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
             </svg>
 
-            {/* Labels */}
-            <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-slate-900/80 text-white text-[9px] font-bold px-2 py-0.5 rounded">
+            {/* Team Badges on Pitch */}
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow">
               {opponent.name.toUpperCase()} ({rivalFormation.name})
             </div>
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-orange-600 text-white text-[9px] font-black px-2 py-0.5 rounded">
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-orange-600 text-white text-[9px] font-black px-2 py-0.5 rounded shadow">
               HOUGANG UNITED FC ({hgufcFormation.name})
             </div>
 
@@ -127,22 +137,22 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                     top: `${rivalY}%`,
                     transform: 'translate(-50%, -50%)',
                   }}
-                  className="absolute z-15 flex flex-col items-center"
+                  className="absolute z-10 flex flex-col items-center"
                 >
                   <div 
                     className="w-6 h-6 rounded-full flex flex-col items-center justify-center font-black border border-white text-[8px] shadow text-white"
-                    style={{ backgroundColor: opponent.primaryColor }}
+                    style={{ backgroundColor: opponent.primaryColor || '#dc2626' }}
                   >
                     <span>{rNumber}</span>
                   </div>
-                  <span className="text-[7.5px] font-bold text-white bg-slate-900/90 px-1 rounded whitespace-nowrap mt-0.5">
+                  <span className="text-[7.5px] font-bold text-white bg-slate-900/90 px-1 rounded whitespace-nowrap mt-0.5 shadow-xs">
                     {rName.split(' ').pop()}
                   </span>
                 </div>
               );
             })}
 
-            {/* Players on Pitch */}
+            {/* HGUFC Starting XI on Pitch */}
             {startingXI.map((p) => {
               const isGK = p.position === 'GK';
               return (
@@ -160,7 +170,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                   }`}>
                     <span>{p.number}</span>
                   </div>
-                  <span className="text-[8px] font-bold text-white bg-slate-900/90 px-1 rounded whitespace-nowrap mt-0.5">
+                  <span className="text-[8px] font-bold text-white bg-slate-900/90 px-1 rounded whitespace-nowrap mt-0.5 shadow-xs">
                     {p.name.split(' ').pop()}
                   </span>
                 </div>
@@ -177,7 +187,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                 Starting XI ({hgufcFormation.name})
               </h3>
               <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                {startingXI.length}/11 Selected
+                {startingXI.length}/11 Assigned
               </span>
             </div>
 
@@ -191,6 +201,9 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                       {p.number}
                     </span>
                     <span className="font-bold text-slate-800">{p.name}</span>
+                    {p.preferredFoot && (
+                      <span className="text-[8.5px] font-semibold text-slate-400">({p.preferredFoot[0]})</span>
+                    )}
                   </div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase">{p.roleLabel || p.position}</span>
                 </div>
@@ -198,7 +211,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 pt-2 border-t border-slate-200">
+          <div className="mt-3 pt-2 border-t border-slate-200">
             <h4 className="text-[11px] font-black uppercase text-slate-700 mb-1">
               Substitutes & Tactical Options ({bench.length})
             </h4>
@@ -214,7 +227,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
       <div className="mb-6 pt-4 border-t-2 border-slate-200">
         <h3 className="text-sm font-black uppercase tracking-wide text-slate-900 mb-2 flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span>
-          <span>Tactical SWOT Matrix (HGUFC vs {opponent.name})</span>
+          <span>Tactical SWOT Matrix (DAFO: HGUFC vs {opponent.name})</span>
         </h3>
 
         <div className="grid grid-cols-2 gap-3">
@@ -272,7 +285,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
             <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
               High-Priority Tactical Opportunities
             </span>
-            {opportunities.map((opp) => (
+            {opportunities.slice(0, 4).map((opp) => (
               <div key={opp.id} className="p-2.5 bg-emerald-50/50 border border-emerald-200 rounded">
                 <div className="flex items-center justify-between">
                   <span className="font-black text-slate-900 text-[10.5px]">{opp.title}</span>
@@ -291,7 +304,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
             <span className="text-[11px] font-black uppercase tracking-wider text-rose-800 bg-rose-100 px-2 py-0.5 rounded">
               Critical Defensive Threats
             </span>
-            {threats.map((th) => (
+            {threats.slice(0, 4).map((th) => (
               <div key={th.id} className="p-2.5 bg-rose-50/50 border border-rose-200 rounded">
                 <div className="flex items-center justify-between">
                   <span className="font-black text-slate-900 text-[10.5px]">{th.title}</span>
@@ -308,7 +321,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
       </div>
 
       {/* TACTICAL PHASE INSTRUCTIONS */}
-      <div className="pt-4 border-t-2 border-slate-200">
+      <div className="mb-6 pt-4 border-t-2 border-slate-200">
         <h3 className="text-sm font-black uppercase tracking-wide text-slate-900 mb-2">
           Tactical Phase Instructions & Coaching Directives
         </h3>
@@ -346,10 +359,107 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
         </div>
       </div>
 
+      {/* =========================================================================
+          PAGE 2 & BEYOND: COMPLETE MULTIDIMENSIONAL TACTICAL ANALYSIS
+          (THE 10 PHASES OF PLAY: GEMINI + CHATGPT + CLAUDE)
+          ========================================================================= */}
+      {report && report.phases && report.phases.length > 0 && (
+        <div className="pt-6 border-t-4 border-slate-900 mt-6">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b-2 border-orange-500">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                Triple-Synthetic Tactical Report
+              </span>
+              <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-1">
+                The 10 Mandatory Phases of Play Breakdown
+              </h2>
+              <p className="text-[10px] text-slate-500 font-semibold">
+                Integrated Framework: Gemini (Space & Geometry) • ChatGPT (Profiles & Roles) • Claude (Operational SWOT)
+              </p>
+            </div>
+            <div className="text-right text-[10px] text-slate-600">
+              <span className="font-black text-slate-900">Total Phases:</span> 10/10 Analyzed
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {report.phases.map((phase) => (
+              <div 
+                key={phase.phaseKey}
+                className="p-3.5 bg-slate-50/80 rounded-lg border border-slate-200 shadow-2xs break-inside-avoid"
+              >
+                {/* Phase Header */}
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-5 h-5 rounded bg-orange-600 text-white font-black text-[10px] flex items-center justify-center">
+                      {phase.phaseNumber}
+                    </span>
+                    <h3 className="text-xs font-black uppercase text-slate-900">
+                      {phase.phaseName}
+                    </h3>
+                    <span className="text-[10px] text-slate-500 italic">
+                      — {phase.subtitle}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded">
+                    Phase {phase.phaseNumber} of 10
+                  </span>
+                </div>
+
+                {/* 3 Perspectives Grid */}
+                <div className="grid grid-cols-3 gap-2.5 text-[9.5px] leading-relaxed mb-2.5">
+                  
+                  {/* 1. Gemini */}
+                  <div className="p-2 bg-blue-50/60 border border-blue-200 rounded">
+                    <span className="font-black text-blue-900 block uppercase border-b border-blue-200/60 pb-1 mb-1">
+                      1. Gemini (Geometry & Space)
+                    </span>
+                    <p className="mb-1"><strong className="text-blue-950">Channels:</strong> {phase.geminiPerspective.channelOccupation}</p>
+                    <p className="mb-1"><strong className="text-blue-950">Lines:</strong> {phase.geminiPerspective.lineHeightsAndCompactness}</p>
+                    <p><strong className="text-blue-950">Superiority:</strong> {phase.geminiPerspective.superiorities}</p>
+                  </div>
+
+                  {/* 2. ChatGPT */}
+                  <div className="p-2 bg-emerald-50/60 border border-emerald-200 rounded">
+                    <span className="font-black text-emerald-900 block uppercase border-b border-emerald-200/60 pb-1 mb-1">
+                      2. ChatGPT (Profiles & Roles)
+                    </span>
+                    <p className="mb-1"><strong className="text-emerald-950">Traits:</strong> {phase.chatGptPerspective.playerProfiles}</p>
+                    <p><strong className="text-emerald-950">Behaviors:</strong> {phase.chatGptPerspective.requiredBehaviors}</p>
+                  </div>
+
+                  {/* 3. Claude */}
+                  <div className="p-2 bg-amber-50/60 border border-amber-200 rounded">
+                    <span className="font-black text-amber-900 block uppercase border-b border-amber-200/60 pb-1 mb-1">
+                      3. Claude (Operational SWOT)
+                    </span>
+                    <p><strong className="text-orange-800">[S]</strong> {phase.claudePerspective.strength}</p>
+                    <p><strong className="text-amber-800">[W]</strong> {phase.claudePerspective.weakness}</p>
+                    <p><strong className="text-emerald-800">[O]</strong> {phase.claudePerspective.opportunity}</p>
+                    <p><strong className="text-rose-800">[T]</strong> {phase.claudePerspective.threat}</p>
+                  </div>
+
+                </div>
+
+                {/* Direct Tactical Recommendation */}
+                <div className="p-2 bg-white rounded border border-orange-200 flex items-start space-x-1.5">
+                  <span className="font-black text-orange-600 text-[10px] uppercase flex-shrink-0">
+                    Direct Tactical Recommendation:
+                  </span>
+                  <span className="font-bold text-slate-800 text-[9.5px]">
+                    {phase.directTacticalRecommendation}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Footer stamp */}
       <div className="mt-8 pt-4 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase tracking-wider">
         <span>Confidential • Hougang United FC Coaching Staff</span>
-        <span>Compiled via Game Plan HGUFC Analytics Engine</span>
+        <span>Compiled via Game Plan HGUFC Analytics Engine (Gemini + ChatGPT + Claude)</span>
       </div>
     </div>
   );
