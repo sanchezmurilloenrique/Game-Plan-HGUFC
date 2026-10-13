@@ -14,9 +14,13 @@ import {
   SwotData, 
   TacticalNotes, 
   GeneratedInsight,
-  OpponentPlayer
+  OpponentPlayer,
+  MultidimensionalReport
 } from './types';
-import { generateTacticalInsights } from './services/tacticalEngine';
+import { 
+  generateTacticalInsights, 
+  generateMultidimensionalReport 
+} from './services/tacticalEngine';
 import { exportMatchPlanToPdf } from './services/pdfExport';
 
 import { Header } from './components/Header';
@@ -157,6 +161,19 @@ export default function App() {
     return opponents.find(o => o.id === matchPlan.selectedOpponentId) || opponents[0];
   }, [opponents, matchPlan.selectedOpponentId]);
 
+  const [recalculateNonce, setRecalculateNonce] = useState(0);
+
+  // Multidimensional Tactical Analysis (10 Phases of Play: Gemini + ChatGPT + Claude)
+  const multidimensionalReport: MultidimensionalReport = useMemo(() => {
+    return generateMultidimensionalReport(
+      currentHgufcFormation,
+      currentRivalFormation,
+      currentOpponent,
+      matchPlan.swot,
+      players
+    );
+  }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players, recalculateNonce]);
+
   // Automated Threats & Opportunities Insights Engine
   const tacticalInsights: GeneratedInsight[] = useMemo(() => {
     return generateTacticalInsights(
@@ -166,7 +183,7 @@ export default function App() {
       matchPlan.swot,
       players
     );
-  }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players]);
+  }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players, recalculateNonce]);
 
   // Auto-Assign 11 Starting Players to Formation Positions
   const assignStartingXIToFormation = useCallback((formation: Formation) => {
@@ -419,14 +436,35 @@ export default function App() {
 
   // Add directive from SWOT engine into Tactical Instructions
   const handleAddDirectiveToNotes = (directive: string) => {
+    const lower = directive.toLowerCase();
+    let field: keyof TacticalNotes = 'inPossessionStructure';
+    let fieldLabel = 'In-Possession Structure';
+
+    if (lower.includes('build-up') || lower.includes('goal-kick') || lower.includes('salida') || lower.includes('circula')) {
+      field = 'buildUpPhase';
+      fieldLabel = 'Build-Up Phase';
+    } else if (lower.includes('press') || lower.includes('presion') || lower.includes('hunting') || lower.includes('trigger') || lower.includes('bloque')) {
+      field = 'pressingTriggers';
+      fieldLabel = 'Pressing Triggers';
+    } else if (lower.includes('transition') || lower.includes('transición') || lower.includes('counter') || lower.includes('contra') || lower.includes('gegenpress')) {
+      field = 'outOfPossessionTransition';
+      fieldLabel = 'Defensive Transition';
+    } else if (lower.includes('rest defense') || lower.includes('rest-defense') || lower.includes('3+2') || lower.includes('3+1') || lower.includes('seguridad')) {
+      field = 'restDefense';
+      fieldLabel = 'Rest Defense';
+    } else if (lower.includes('set piece') || lower.includes('corner') || lower.includes('falta') || lower.includes('aereo') || lower.includes('balón parado')) {
+      field = 'setPieces';
+      fieldLabel = 'Set Pieces';
+    }
+
     setMatchPlan(prev => ({
       ...prev,
       tacticalNotes: {
         ...prev.tacticalNotes,
-        inPossessionStructure: `${prev.tacticalNotes.inPossessionStructure}\n• ${directive}`,
+        [field]: prev.tacticalNotes[field] ? `${prev.tacticalNotes[field]}\n• ${directive}` : `• ${directive}`,
       }
     }));
-    showToast('Directive appended to In-Possession Structure notes', 'success');
+    showToast(`Directive appended to ${fieldLabel} notes`, 'success');
   };
 
   // Load tactical instruction presets
@@ -662,6 +700,8 @@ export default function App() {
             rivalFormation={currentRivalFormation}
             opponent={currentOpponent}
             insights={tacticalInsights}
+            report={multidimensionalReport}
+            players={players}
             onUpdateSwot={(updated) => {
               setMatchPlan(prev => ({
                 ...prev,
@@ -669,7 +709,8 @@ export default function App() {
               }));
             }}
             onRegenerateInsights={() => {
-              showToast('Tactical intelligence engine recalculated', 'success');
+              setRecalculateNonce(n => n + 1);
+              showToast('Tactical intelligence engine recalculated with current squad & DAFO', 'success');
             }}
             onAddDirectiveToNotes={handleAddDirectiveToNotes}
           />

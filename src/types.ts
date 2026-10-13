@@ -81,6 +81,37 @@ export interface GeneratedInsight {
   title: string;
   description: string;
   actionableDirective: string;
+  phaseRef?: string;
+}
+
+export interface TacticalPhaseAnalysis {
+  phaseKey: string;
+  phaseNumber: number;
+  phaseName: string;
+  subtitle: string;
+  geminiPerspective: {
+    channelOccupation: string;
+    lineHeightsAndCompactness: string;
+    superiorities: string;
+  };
+  chatGptPerspective: {
+    playerProfiles: string;
+    requiredBehaviors: string;
+  };
+  claudePerspective: {
+    strength: string;
+    weakness: string;
+    opportunity: string;
+    threat: string;
+  };
+  directTacticalRecommendation: string;
+}
+
+export interface MultidimensionalReport {
+  timestamp: string;
+  engine: string;
+  summary: string;
+  phases: TacticalPhaseAnalysis[];
 }
 
 export interface TacticalNotes {
