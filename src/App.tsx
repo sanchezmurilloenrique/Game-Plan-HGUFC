@@ -24,11 +24,6 @@ import {
   generateMultidimensionalReport 
 } from './services/tacticalEngine';
 import { 
-  exportMatchPlanToPdf, 
-  exportMatchPlanToHtml, 
-  exportMatchPlanImages 
-} from './services/pdfExport';
-import { 
   persistAllData, 
   loadAllDataFromCloud, 
   subscribeToRemoteChanges, 
@@ -59,10 +54,7 @@ import {
   CheckCircle, 
   AlertCircle,
   HelpCircle,
-  Download,
   Printer,
-  FileCode,
-  Image as ImageIcon,
   UserCheck,
   Shield
 } from 'lucide-react';
@@ -184,9 +176,6 @@ export default function App() {
     return '';
   });
 
-  // PDF Export state
-  const [isExporting, setIsExporting] = useState(false);
-  const [readyPdf, setReadyPdf] = useState<{ blobUrl: string; filename: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // Show Toast
@@ -741,48 +730,9 @@ export default function App() {
     }
   };
 
-  // PDF Export execution
-  const handleExportPdf = async () => {
-    setIsExporting(true);
-    showToast('Compiling executive tactical match dossier...', 'info');
-    
-    const filename = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_${matchPlan.matchDate}.pdf`;
-    const result = await exportMatchPlanToPdf('match-plan-pdf-document', filename, (status) => {
-      setToastMessage({ text: status, type: 'info' });
-    });
-
-    setIsExporting(false);
-    if (result.success && result.blobUrl) {
-      setReadyPdf({ blobUrl: result.blobUrl, filename });
-      showToast('Match plan PDF ready! Download started automatically.', 'success');
-    } else {
-      showToast(result.error || 'PDF compilation failed. Please try again.', 'error');
-    }
-  };
-
-  // Standalone HTML Export execution (guaranteed 100% exact print replica)
-  const handleExportHtml = () => {
-    const filename = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_${matchPlan.matchDate}.html`;
-    const res = exportMatchPlanToHtml('match-plan-pdf-document', filename);
-    if (res.success) {
-      showToast('HTML dossier downloaded! Exact print replica viewable in any browser.', 'success');
-    } else {
-      showToast(res.error || 'HTML export failed', 'error');
-    }
-  };
-
-  // High-Resolution PNG Page Images Export execution
-  const handleExportPng = async () => {
-    showToast('Generating high-resolution PNG page images...', 'info');
-    const baseName = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_Page`;
-    const res = await exportMatchPlanImages('match-plan-pdf-document', baseName, (status) => {
-      setToastMessage({ text: status, type: 'info' });
-    });
-    if (res.success) {
-      showToast(`Exported ${res.count || 0} pages as high-resolution PNGs!`, 'success');
-    } else {
-      showToast(res.error || 'PNG export failed', 'error');
-    }
+  // Print Match Plan execution (Native high-fidelity vector print)
+  const handlePrintMatchPlan = () => {
+    window.print();
   };
 
   return (
@@ -826,9 +776,9 @@ export default function App() {
         onOpenSupabaseSql={() => setIsSupabaseModalOpen(true)}
         onOpenRivalCustomizer={() => setIsRivalCustomizerOpen(true)}
         onUpdateOpponentColor={handleUpdateOpponentColor}
-        onExportPdf={handleExportPdf}
+        onExportPdf={handlePrintMatchPlan}
         onResetData={handleResetData}
-        isExporting={isExporting}
+        isExporting={false}
         onSaveAll={handleSaveAll}
         isSaving={isSaving}
         lastSavedTime={lastSavedTime}
@@ -1052,49 +1002,16 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* Export Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleExportPdf}
-                    disabled={isExporting}
-                    className="px-3.5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-                    title="Export complete match plan to print-accurate PDF file"
-                  >
-                    <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
-                    <span>{isExporting ? 'Compiling PDF...' : 'Download PDF'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleExportHtml}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Download standalone HTML dossier (100% exact print replica)"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Download HTML</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleExportPng}
-                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Export pages as high-resolution PNG images"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Pages (PNG)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Open browser print dialog to print or save native vector PDF"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print / Save as PDF</span>
-                  </button>
-                </div>
+                {/* Print Action Button */}
+                <button
+                  type="button"
+                  onClick={handlePrintMatchPlan}
+                  className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
+                  title="Open browser print dialog to print or save as vector PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Match Plan (PDF)</span>
+                </button>
               </div>
 
               {/* Coaching Staff Sign-Off & Directives Settings Row */}
@@ -1199,79 +1116,7 @@ export default function App() {
         />
       </div>
 
-      {/* Interactive Direct PDF Download Card */}
-      {readyPdf && (
-        <aside 
-          aria-label="PDF Ready Notification"
-          className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-full bg-slate-900 text-white rounded-xl shadow-2xl border-2 border-orange-500 p-4 animate-in fade-in slide-in-from-bottom-5 duration-300"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-600 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow">
-                PDF
-              </div>
-              <div className="min-w-0">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span>Match Dossier Ready</span>
-                </h4>
-                <p className="text-[11px] text-slate-300 truncate mt-0.5" title={readyPdf.filename}>
-                  {readyPdf.filename}
-                </p>
-              </div>
-            </div>
-            <button 
-              type="button"
-              onClick={() => setReadyPdf(null)}
-              className="text-slate-400 hover:text-white text-sm font-bold p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
-              title="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
 
-          <div className="mt-3.5 grid grid-cols-2 gap-2">
-            <a
-              href={readyPdf.blobUrl}
-              download={readyPdf.filename}
-              className="py-2 px-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs rounded-lg text-center shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download PDF</span>
-            </a>
-            <button
-              type="button"
-              onClick={handleExportHtml}
-              className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              title="Download standalone HTML file with identical print styling"
-            >
-              <FileCode className="w-3.5 h-3.5 text-orange-400" />
-              <span>Download HTML</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleExportPng}
-              className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              title="Download high-resolution PNG images"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-slate-300" />
-              <span>Pages (PNG)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow"
-              title="Open browser print dialog to print or save native vector PDF"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print / Vector PDF</span>
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 text-center">
-            All download options are configured to match the print document styling.
-          </p>
-        </aside>
-      )}
 
       {/* Modals */}
       <PlayerModal

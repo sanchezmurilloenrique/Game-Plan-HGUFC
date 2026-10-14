@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Users, Shield, Layers, RefreshCw, Calendar, MapPin, Trophy, Database, Save, Loader2, Cloud, CloudOff, Share2 } from 'lucide-react';
+import { Printer, Users, Shield, Layers, RefreshCw, Calendar, MapPin, Trophy, Database, Save, Loader2, Cloud, CloudOff, Share2 } from 'lucide-react';
 import { MatchPlan, OpponentTeam, Formation } from '../types';
 
 interface HeaderProps {
@@ -195,15 +195,15 @@ export const Header: React.FC<HeaderProps> = ({
               <RefreshCw className="w-4 h-4" />
             </button>
 
-            {/* Prominent Export PDF Button */}
+            {/* Prominent Print Match Plan Button */}
             <button
               type="button"
               onClick={onExportPdf}
-              disabled={isExporting}
-              className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 rounded-lg shadow-sm hover:shadow transition-all disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
+              title="Open browser print dialog to print or save as vector PDF"
             >
-              <Download className={`w-4 h-4 mr-1.5 ${isExporting ? 'animate-bounce' : ''}`} />
-              {isExporting ? 'Generating Dossier...' : 'Export Match Plan (PDF)'}
+              <Printer className="w-4 h-4 mr-1.5" />
+              <span>Print Match Plan (PDF)</span>
             </button>
           </div>
         </div>
