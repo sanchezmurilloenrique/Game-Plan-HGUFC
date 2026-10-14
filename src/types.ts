@@ -137,3 +137,36 @@ export interface MatchPlan {
   showOpponentTokens: boolean;
   activePitchTool: 'select' | 'arrow' | 'zone';
 }
+
+export interface CampogramToken {
+  id: string; // e.g. "hgufc-p-1" or "opp-0" or "ball"
+  type: 'hgufc' | 'opponent' | 'ball';
+  originalId?: string;
+  number: number;
+  name: string;
+  position: PlayerPosition | 'BALL';
+  role?: string;
+  x: number; // 0 - 100 percentage
+  y: number; // 0 - 100 percentage
+  teamColor?: string;
+  textColor?: string;
+}
+
+export interface CampogramStep {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description?: string;
+  tokens: CampogramToken[];
+}
+
+export interface CampogramPlay {
+  id: string;
+  title: string;
+  description: string;
+  category: 'Build-Up Phase' | 'Offensive Transition' | 'High Press & Block' | 'Set Pieces' | 'Custom Routine' | 'Salida de Balón' | 'Transición Ofensiva' | 'Presión y Bloque' | 'Balón Parado' | 'Personalizada';
+  steps: CampogramStep[];
+  speed?: number; // 0.5, 1, 1.5, 2
+  loop?: boolean;
+}
+

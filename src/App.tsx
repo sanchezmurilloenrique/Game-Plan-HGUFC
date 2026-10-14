@@ -15,8 +15,10 @@ import {
   TacticalNotes, 
   GeneratedInsight,
   OpponentPlayer,
-  MultidimensionalReport
+  MultidimensionalReport,
+  CampogramPlay
 } from './types';
+import { DEFAULT_CAMPOGRAM_PLAYS } from './data/campogramPresets';
 import { 
   generateTacticalInsights, 
   generateMultidimensionalReport 
@@ -42,9 +44,11 @@ import { OpponentModal } from './components/OpponentModal';
 import { RivalCustomizerModal } from './components/RivalCustomizerModal';
 import { SupabaseSqlModal } from './components/SupabaseSqlModal';
 import { PrintReportView } from './components/PrintReportView';
+import { TacticalCampogramAnimator } from './components/TacticalCampogramAnimator';
 
 import { 
   LayoutDashboard, 
+  Play,
   Target, 
   BookOpen, 
   FileCheck, 
@@ -124,8 +128,21 @@ export default function App() {
     };
   });
 
+  const [campogramPlays, setCampogramPlays] = useState<CampogramPlay[]>(() => {
+    try {
+      const saved = localStorage.getItem('hgufc_campogram_plays_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_CAMPOGRAM_PLAYS;
+  });
+
   // Active Main Tab
-  const [activeTab, setActiveTab] = useState<'board' | 'swot' | 'instructions' | 'preview'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'campogram' | 'swot' | 'instructions' | 'preview'>('board');
   const [activePitchView, setActivePitchView] = useState<'both' | 'hgufc' | 'opponent'>('both');
   const [showPitchZones, setShowPitchZones] = useState<boolean>(false);
   const [isPitchExpanded, setIsPitchExpanded] = useState<boolean>(false);
@@ -195,9 +212,12 @@ export default function App() {
                 showPitchZones: false, // maintain half-spaces default
               }));
             }
+            if (cloud.campogramPlays && cloud.campogramPlays.length > 0) {
+              setCampogramPlays(cloud.campogramPlays);
+            }
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             setLastSavedTime(time);
-            showToast('¡Plan táctico cargado y sincronizado desde la nube!', 'success');
+            showToast('Tactical plan & plays loaded and synced from cloud!', 'success');
           }
         })
         .catch((err) => {
@@ -221,9 +241,12 @@ export default function App() {
               showPitchZones: false,
             }));
           }
+          if (remoteData.campogramPlays && remoteData.campogramPlays.length > 0) {
+            setCampogramPlays(remoteData.campogramPlays);
+          }
           const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
           setLastSavedTime(time);
-          showToast('Plan táctico actualizado en tiempo real desde otro dispositivo', 'info');
+          showToast('Tactical plan updated in real time from another device', 'info');
         }
       });
 
@@ -243,16 +266,17 @@ export default function App() {
         matchPlan,
         formations: hgufcFormations,
         opponents,
+        campogramPlays,
       });
       setLastSavedTime(res.timestamp);
       setIsCloudConnected(isSupabaseConfigured());
       showToast(res.message, res.savedToSupabase ? 'success' : 'info');
     } catch (err: any) {
-      showToast(`Error guardando cambios: ${err?.message || 'Revisa el almacenamiento'}`, 'error');
+      showToast(`Error saving changes: ${err?.message || 'Check storage connection'}`, 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [players, matchPlan, hgufcFormations, opponents, showToast]);
+  }, [players, matchPlan, hgufcFormations, opponents, campogramPlays, showToast]);
 
   // Copy shareable link for mobile / other devices
   const handleCopySyncLink = useCallback(() => {
@@ -734,6 +758,23 @@ export default function App() {
               <span>Tactical Pitch & Board</span>
             </button>
 
+            {/* Tactical Campogram & Animation Studio Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('campogram')}
+              className={`py-3 px-1 border-b-2 flex items-center gap-2 transition-all whitespace-nowrap ${
+                activeTab === 'campogram'
+                  ? 'border-orange-600 text-orange-600 font-extrabold'
+                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+              }`}
+            >
+              <Play className="w-4 h-4 fill-orange-500 text-orange-500" />
+              <span>Tactical Campogram & Animations</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-black animate-pulse">
+                2D Interactive
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveTab('swot')}
@@ -831,6 +872,33 @@ export default function App() {
             </div>
 
           </div>
+        )}
+
+        {/* TAB: TACTICAL CAMPOGRAM & ANIMATIONS */}
+        {activeTab === 'campogram' && (
+          <TacticalCampogramAnimator
+            players={players}
+            onUpdatePlayers={setPlayers}
+            hgufcFormations={hgufcFormations}
+            opponents={opponents}
+            currentOpponent={currentOpponent}
+            currentHgufcFormation={currentHgufcFormation}
+            currentRivalFormation={currentRivalFormation}
+            campogramPlays={campogramPlays}
+            onUpdatePlays={(newPlays) => {
+              setCampogramPlays(newPlays);
+              try {
+                localStorage.setItem('hgufc_campogram_plays_v1', JSON.stringify(newPlays));
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            onSelectOpponent={(oppId) => {
+              setMatchPlan(prev => ({ ...prev, selectedOpponentId: oppId }));
+            }}
+            onSaveAll={handleSaveAll}
+            isSaving={isSaving}
+          />
         )}
 
         {/* TAB 2: SWOT & AUTOMATED THREATS / OPPORTUNITIES */}

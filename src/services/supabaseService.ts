@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Player, Formation, OpponentTeam, MatchPlan } from '../types';
+import { Player, Formation, OpponentTeam, MatchPlan, CampogramPlay } from '../types';
 
 export interface SupabaseConfig {
   url: string;
@@ -11,6 +11,7 @@ export interface SyncStatePayload {
   matchPlan: MatchPlan;
   formations: Formation[];
   opponents: OpponentTeam[];
+  campogramPlays?: CampogramPlay[];
   savedAt?: string;
   sourceDevice?: string;
 }
@@ -228,6 +229,7 @@ export async function loadAllDataFromCloud(): Promise<{
         if (payload.matchPlan) localStorage.setItem(STORAGE_MATCHPLAN_KEY, JSON.stringify(payload.matchPlan));
         if (payload.formations) localStorage.setItem(STORAGE_FORMATIONS_KEY, JSON.stringify(payload.formations));
         if (payload.opponents) localStorage.setItem(STORAGE_OPPONENTS_KEY, JSON.stringify(payload.opponents));
+        if (payload.campogramPlays) localStorage.setItem('hgufc_campogram_plays_v1', JSON.stringify(payload.campogramPlays));
         if (stateRow.updated_at) localStorage.setItem(STORAGE_LAST_SAVED_KEY, stateRow.updated_at);
       } catch (storageErr) {
         console.warn('LocalStorage cache update warning:', storageErr);
@@ -391,9 +393,21 @@ export async function persistAllData(data: {
   matchPlan: MatchPlan;
   formations: Formation[];
   opponents: OpponentTeam[];
+  campogramPlays?: CampogramPlay[];
 }): Promise<SaveSyncResult> {
   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const isoTimestamp = new Date().toISOString();
+
+  // Try to grab campogramPlays from argument or localStorage
+  let playsToSave = data.campogramPlays;
+  if (!playsToSave) {
+    try {
+      const savedPlays = localStorage.getItem('hgufc_campogram_plays_v1');
+      if (savedPlays) playsToSave = JSON.parse(savedPlays);
+    } catch {
+      // ignore
+    }
+  }
 
   // 1. Always persist to localStorage for instant offline safety
   try {
@@ -401,6 +415,9 @@ export async function persistAllData(data: {
     localStorage.setItem(STORAGE_MATCHPLAN_KEY, JSON.stringify(data.matchPlan));
     localStorage.setItem(STORAGE_FORMATIONS_KEY, JSON.stringify(data.formations));
     localStorage.setItem(STORAGE_OPPONENTS_KEY, JSON.stringify(data.opponents));
+    if (playsToSave) {
+      localStorage.setItem('hgufc_campogram_plays_v1', JSON.stringify(playsToSave));
+    }
     localStorage.setItem(STORAGE_LAST_SAVED_KEY, isoTimestamp);
   } catch (e) {
     console.error('Failed to save to localStorage:', e);
@@ -425,6 +442,7 @@ export async function persistAllData(data: {
       matchPlan: data.matchPlan,
       formations: data.formations,
       opponents: data.opponents,
+      campogramPlays: playsToSave,
       savedAt: isoTimestamp,
     };
 
