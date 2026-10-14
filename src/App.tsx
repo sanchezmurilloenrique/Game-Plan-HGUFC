@@ -23,7 +23,11 @@ import {
   generateTacticalInsights, 
   generateMultidimensionalReport 
 } from './services/tacticalEngine';
-import { exportMatchPlanToPdf } from './services/pdfExport';
+import { 
+  exportMatchPlanToPdf, 
+  exportMatchPlanToHtml, 
+  exportMatchPlanImages 
+} from './services/pdfExport';
 import { 
   persistAllData, 
   loadAllDataFromCloud, 
@@ -56,7 +60,11 @@ import {
   AlertCircle,
   HelpCircle,
   Download,
-  Printer
+  Printer,
+  FileCode,
+  Image as ImageIcon,
+  UserCheck,
+  Shield
 } from 'lucide-react';
 
 const STORAGE_PLAYERS = 'hgufc_squad_v1';
@@ -105,6 +113,8 @@ export default function App() {
         const parsed = JSON.parse(saved);
         // Default half-spaces to unchecked as requested
         return {
+          headCoachName: 'F. Ariffin',
+          analystName: 'Performance Analyst',
           ...parsed,
           showPitchZones: false,
         };
@@ -125,6 +135,9 @@ export default function App() {
       showPitchZones: false,
       showOpponentTokens: true,
       activePitchTool: 'select',
+      headCoachName: 'F. Ariffin',
+      analystName: 'Performance Analyst',
+      customDirectives: undefined,
     };
   });
 
@@ -334,7 +347,7 @@ export default function App() {
   }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players, recalculateNonce]);
 
   // Automated Threats & Opportunities Insights Engine
-  const tacticalInsights: GeneratedInsight[] = useMemo(() => {
+  const baseTacticalInsights: GeneratedInsight[] = useMemo(() => {
     return generateTacticalInsights(
       currentHgufcFormation,
       currentRivalFormation,
@@ -343,6 +356,64 @@ export default function App() {
       players
     );
   }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players, recalculateNonce]);
+
+  const tacticalInsights: GeneratedInsight[] = useMemo(() => {
+    if (matchPlan.customDirectives && Array.isArray(matchPlan.customDirectives)) {
+      return matchPlan.customDirectives;
+    }
+    return baseTacticalInsights;
+  }, [matchPlan.customDirectives, baseTacticalInsights]);
+
+  // Handlers to modify, add, delete, or reset directives for the final report
+  const handleUpdateDirective = useCallback((updated: GeneratedInsight) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customDirectives && Array.isArray(prev.customDirectives)
+        ? prev.customDirectives
+        : baseTacticalInsights;
+      const nextList = currentList.map(item => item.id === updated.id ? updated : item);
+      return {
+        ...prev,
+        customDirectives: nextList,
+      };
+    });
+    showToast('Directive updated for final report', 'success');
+  }, [baseTacticalInsights, showToast]);
+
+  const handleDeleteDirective = useCallback((id: string) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customDirectives && Array.isArray(prev.customDirectives)
+        ? prev.customDirectives
+        : baseTacticalInsights;
+      const nextList = currentList.filter(item => item.id !== id);
+      return {
+        ...prev,
+        customDirectives: nextList,
+      };
+    });
+    showToast('Directive removed from final report', 'info');
+  }, [baseTacticalInsights, showToast]);
+
+  const handleAddDirective = useCallback((newDir: GeneratedInsight) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customDirectives && Array.isArray(prev.customDirectives)
+        ? prev.customDirectives
+        : baseTacticalInsights;
+      return {
+        ...prev,
+        customDirectives: [newDir, ...currentList],
+      };
+    });
+    showToast('Custom directive added to match plan', 'success');
+  }, [baseTacticalInsights, showToast]);
+
+  const handleResetDirectives = useCallback(() => {
+    setMatchPlan(prev => ({
+      ...prev,
+      customDirectives: undefined,
+    }));
+    setRecalculateNonce(n => n + 1);
+    showToast('Reset directives to AI Engine defaults', 'info');
+  }, [showToast]);
 
   // Auto-Assign 11 Starting Players to Formation Positions
   const assignStartingXIToFormation = useCallback((formation: Formation) => {
@@ -689,6 +760,31 @@ export default function App() {
     }
   };
 
+  // Standalone HTML Export execution (guaranteed 100% exact print replica)
+  const handleExportHtml = () => {
+    const filename = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_${matchPlan.matchDate}.html`;
+    const res = exportMatchPlanToHtml('match-plan-pdf-document', filename);
+    if (res.success) {
+      showToast('HTML dossier downloaded! Exact print replica viewable in any browser.', 'success');
+    } else {
+      showToast(res.error || 'HTML export failed', 'error');
+    }
+  };
+
+  // High-Resolution PNG Page Images Export execution
+  const handleExportPng = async () => {
+    showToast('Generating high-resolution PNG page images...', 'info');
+    const baseName = `GamePlan_HGUFC_vs_${currentOpponent.shortName}_Page`;
+    const res = await exportMatchPlanImages('match-plan-pdf-document', baseName, (status) => {
+      setToastMessage({ text: status, type: 'info' });
+    });
+    if (res.success) {
+      showToast(`Exported ${res.count || 0} pages as high-resolution PNGs!`, 'success');
+    } else {
+      showToast(res.error || 'PNG export failed', 'error');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col text-slate-900">
       
@@ -922,6 +1018,10 @@ export default function App() {
               showToast('Tactical intelligence engine recalculated with current squad & DAFO', 'success');
             }}
             onAddDirectiveToNotes={handleAddDirectiveToNotes}
+            onUpdateDirective={handleUpdateDirective}
+            onDeleteDirective={handleDeleteDirective}
+            onAddDirective={handleAddDirective}
+            onResetDirectives={handleResetDirectives}
           />
         )}
 
@@ -935,31 +1035,122 @@ export default function App() {
                 tacticalNotes: { ...prev.tacticalNotes, ...updated },
               }));
             }}
-            onLoadPreset={handleLoadTacticalPreset}
           />
         )}
 
         {/* TAB 4: DOSSIER PREVIEW & PRINT VIEW */}
         {activeTab === 'preview' && (
           <div className="space-y-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase">
-                  Print-Ready Match Plan Dossier
-                </h3>
-                <p className="text-xs text-slate-500">
-                  This snapshot will be compiled into the exported PDF match sheet.
-                </p>
+            <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase">
+                    Print-Ready Match Plan Dossier
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Executive match report ready for high-fidelity export and official coaching validation.
+                  </p>
+                </div>
+
+                {/* Export Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    disabled={isExporting}
+                    className="px-3.5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    title="Export complete match plan to print-accurate PDF file"
+                  >
+                    <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
+                    <span>{isExporting ? 'Compiling PDF...' : 'Download PDF'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportHtml}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Download standalone HTML dossier (100% exact print replica)"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Download HTML</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportPng}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Export pages as high-resolution PNG images"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Pages (PNG)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Open browser print dialog to print or save native vector PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print / Save as PDF</span>
+                  </button>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                disabled={isExporting}
-                className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <span>{isExporting ? 'Compiling PDF...' : 'Download Match Plan (PDF)'}</span>
-              </button>
+              {/* Coaching Staff Sign-Off & Directives Settings Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1 text-xs">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-orange-600" />
+                    <span>Head Coach Sign-Off Name</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={matchPlan.headCoachName || 'F. Ariffin'}
+                    onChange={(e) => setMatchPlan(prev => ({ ...prev, headCoachName: e.target.value }))}
+                    placeholder="e.g. F. Ariffin"
+                    className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:border-orange-500"
+                  />
+                  <p className="text-[10px] text-slate-400">Appears on the official sign-off block in the final report.</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Performance Analyst Name</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={matchPlan.analystName || 'Performance Analyst'}
+                    onChange={(e) => setMatchPlan(prev => ({ ...prev, analystName: e.target.value }))}
+                    placeholder="e.g. Performance Analyst / Analytics Team"
+                    className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:border-orange-500"
+                  />
+                  <p className="text-[10px] text-slate-400">Appears on the tactical validation signature in the final report.</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
+                      <Target className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Automated Directives in Report</span>
+                    </label>
+                    <p className="text-xs font-bold text-slate-800 mt-1">
+                      {tacticalInsights.filter(i => i.type === 'opportunity').length} Opportunities • {tacticalInsights.filter(i => i.type === 'threat').length} Threats
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Included in Part 2 of this dossier. Modify or delete directives anytime.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('swot')}
+                    className="mt-2 text-xs font-bold text-orange-600 hover:text-orange-700 inline-flex items-center gap-1 self-start cursor-pointer"
+                  >
+                    <span>Manage & Edit Directives →</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="bg-slate-300/60 p-4 sm:p-6 rounded-xl overflow-x-auto flex justify-center">
@@ -981,15 +1172,15 @@ export default function App() {
 
       </main>
 
-      {/* CAPTURE ELEMENT FOR PDF EXPORT */}
+      {/* CAPTURE ELEMENT FOR PDF EXPORT (Offscreen clean host to avoid DOM overlap) */}
       <div 
         id="match-plan-pdf-document-wrapper"
         style={{
           position: 'fixed',
           top: 0,
-          left: 0,
+          left: '-99999px',
           width: '794px',
-          zIndex: -9999,
+          zIndex: 99999,
           pointerEvents: 'none',
           backgroundColor: '#ffffff',
           overflow: 'visible',
@@ -1022,7 +1213,7 @@ export default function App() {
               <div className="min-w-0">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span>Match Dossier PDF Ready</span>
+                  <span>Match Dossier Ready</span>
                 </h4>
                 <p className="text-[11px] text-slate-300 truncate mt-0.5" title={readyPdf.filename}>
                   {readyPdf.filename}
@@ -1039,27 +1230,45 @@ export default function App() {
             </button>
           </div>
 
-          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+          <div className="mt-3.5 grid grid-cols-2 gap-2">
             <a
               href={readyPdf.blobUrl}
               download={readyPdf.filename}
-              className="flex-1 py-2 px-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs rounded-lg text-center shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="py-2 px-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs rounded-lg text-center shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              <span>Download PDF File</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Download PDF</span>
             </a>
             <button
               type="button"
-              onClick={() => window.print()}
-              className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              title="Open browser print dialog to save as PDF"
+              onClick={handleExportHtml}
+              className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              title="Download standalone HTML file with identical print styling"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print</span>
+              <FileCode className="w-3.5 h-3.5 text-orange-400" />
+              <span>Download HTML</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPng}
+              className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              title="Download high-resolution PNG images"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-slate-300" />
+              <span>Pages (PNG)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow"
+              title="Open browser print dialog to print or save native vector PDF"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print / Vector PDF</span>
             </button>
           </div>
           <p className="text-[10px] text-slate-400 mt-2 text-center">
-            If your browser blocked the automatic popup download, click <strong>Download PDF File</strong> above.
+            All download options are configured to match the print document styling.
           </p>
         </aside>
       )}

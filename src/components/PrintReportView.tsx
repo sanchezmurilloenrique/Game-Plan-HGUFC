@@ -483,39 +483,51 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
               {/* Opportunities Column */}
               <div className="space-y-2">
                 <span className="text-[9.5px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded inline-block">
-                  Tactical Opportunities
+                  Tactical Opportunities ({opportunities.length})
                 </span>
-                {opportunities.slice(0, 3).map((opp) => (
-                  <div key={opp.id} className="p-2.5 bg-emerald-50/50 border border-emerald-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-slate-900 text-[10px]">{opp.title}</span>
-                      <span className="text-[8.5px] font-bold text-slate-500 uppercase">{opp.category}</span>
-                    </div>
-                    <p className="text-[9px] text-slate-700 mt-0.5 leading-snug">{opp.description}</p>
-                    <p className="text-[9px] font-bold text-emerald-900 mt-1 bg-white p-1 rounded border border-emerald-200">
-                      Directive: {opp.actionableDirective}
-                    </p>
+                {opportunities.length === 0 ? (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[8.5px] text-slate-400 italic">
+                    No active opportunities in current dossier.
                   </div>
-                ))}
+                ) : (
+                  opportunities.slice(0, 3).map((opp) => (
+                    <div key={opp.id} className="p-2.5 bg-emerald-50/50 border border-emerald-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-slate-900 text-[10px]">{opp.title}</span>
+                        <span className="text-[8.5px] font-bold text-slate-500 uppercase">{opp.category}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-700 mt-0.5 leading-snug">{opp.description}</p>
+                      <p className="text-[9px] font-bold text-emerald-900 mt-1 bg-white p-1 rounded border border-emerald-200">
+                        Directive: {opp.actionableDirective}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Threats Column */}
               <div className="space-y-2">
                 <span className="text-[9.5px] font-black uppercase tracking-wider text-rose-800 bg-rose-100 px-2 py-0.5 rounded inline-block">
-                  Defensive Threats & Safeguards
+                  Defensive Threats & Safeguards ({threats.length})
                 </span>
-                {threats.slice(0, 3).map((th) => (
-                  <div key={th.id} className="p-2.5 bg-rose-50/50 border border-rose-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-slate-900 text-[10px]">{th.title}</span>
-                      <span className="text-[8.5px] font-bold text-slate-500 uppercase">{th.category}</span>
-                    </div>
-                    <p className="text-[9px] text-slate-700 mt-0.5 leading-snug">{th.description}</p>
-                    <p className="text-[9px] font-bold text-rose-900 mt-1 bg-white p-1 rounded border border-rose-200">
-                      Safeguard: {th.actionableDirective}
-                    </p>
+                {threats.length === 0 ? (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[8.5px] text-slate-400 italic">
+                    No active threats in current dossier.
                   </div>
-                ))}
+                ) : (
+                  threats.slice(0, 3).map((th) => (
+                    <div key={th.id} className="p-2.5 bg-rose-50/50 border border-rose-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-slate-900 text-[10px]">{th.title}</span>
+                        <span className="text-[8.5px] font-bold text-slate-500 uppercase">{th.category}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-700 mt-0.5 leading-snug">{th.description}</p>
+                      <p className="text-[9px] font-bold text-rose-900 mt-1 bg-white p-1 rounded border border-rose-200">
+                        Safeguard: {th.actionableDirective}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -855,14 +867,14 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                     </div>
                     <div className="flex items-center space-x-5 text-center">
                       <div>
-                        <div className="w-20 border-b border-slate-400 pb-1 text-[7.5px] font-bold text-slate-700 italic">
-                          F. Ariffin
+                        <div className="w-24 border-b border-slate-400 pb-1 text-[7.5px] font-bold text-slate-700 italic truncate" title={matchPlan.headCoachName || 'F. Ariffin'}>
+                          {matchPlan.headCoachName || 'F. Ariffin'}
                         </div>
                         <span className="text-[7px] text-slate-500 uppercase font-semibold">Head Coach</span>
                       </div>
                       <div>
-                        <div className="w-20 border-b border-slate-400 pb-1 text-[7.5px] font-bold text-slate-700 italic">
-                          Analyst Team
+                        <div className="w-24 border-b border-slate-400 pb-1 text-[7.5px] font-bold text-slate-700 italic truncate" title={matchPlan.analystName || 'Performance Analyst'}>
+                          {matchPlan.analystName || 'Performance Analyst'}
                         </div>
                         <span className="text-[7px] text-slate-500 uppercase font-semibold">Performance Analyst</span>
                       </div>

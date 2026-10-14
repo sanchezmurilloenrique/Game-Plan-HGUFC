@@ -16,7 +16,7 @@ import { TacticalNotes } from '../types';
 interface TacticalInstructionsProps {
   notes: TacticalNotes;
   onUpdateNotes: (updated: Partial<TacticalNotes>) => void;
-  onLoadPreset: (presetName: string) => void;
+  onLoadPreset?: (presetName: string) => void;
 }
 
 export const TacticalInstructions: React.FC<TacticalInstructionsProps> = ({
@@ -43,35 +43,6 @@ export const TacticalInstructions: React.FC<TacticalInstructionsProps> = ({
               Technical guidance across all game phases in professional coaching terminology
             </p>
           </div>
-        </div>
-
-        {/* Tactical Philosophy Presets */}
-        <div className="flex items-center space-x-1.5 text-xs">
-          <span className="text-slate-500 font-medium hidden md:inline">Presets:</span>
-          <button
-            type="button"
-            onClick={() => onLoadPreset('possession')}
-            className="px-2.5 py-1 font-semibold text-slate-700 bg-white border border-slate-200 hover:border-orange-500 hover:text-orange-600 rounded-md transition-colors"
-            title="Load Dominant Positional Play & Half-Space Overloads"
-          >
-            Positional Play
-          </button>
-          <button
-            type="button"
-            onClick={() => onLoadPreset('gegenpress')}
-            className="px-2.5 py-1 font-semibold text-slate-700 bg-white border border-slate-200 hover:border-orange-500 hover:text-orange-600 rounded-md transition-colors"
-            title="Load High Block & Aggressive Gegenpress"
-          >
-            Gegenpress
-          </button>
-          <button
-            type="button"
-            onClick={() => onLoadPreset('counter')}
-            className="px-2.5 py-1 font-semibold text-slate-700 bg-white border border-slate-200 hover:border-orange-500 hover:text-orange-600 rounded-md transition-colors"
-            title="Load Resilient Low Block & Direct Counter-Attack"
-          >
-            Low Block Counter
-          </button>
         </div>
       </div>
 

@@ -19,7 +19,13 @@ import {
   ChevronUp,
   Search,
   ExternalLink,
-  Target
+  Target,
+  Edit2,
+  Trash2,
+  Plus,
+  RotateCcw,
+  Save,
+  X
 } from 'lucide-react';
 import { 
   SwotData, 
@@ -42,6 +48,10 @@ interface SwotAnalysisProps {
   onUpdateSwot: (updated: Partial<SwotData>) => void;
   onRegenerateInsights: () => void;
   onAddDirectiveToNotes: (directive: string) => void;
+  onUpdateDirective?: (updated: GeneratedInsight) => void;
+  onDeleteDirective?: (id: string) => void;
+  onAddDirective?: (newDirective: GeneratedInsight) => void;
+  onResetDirectives?: () => void;
 }
 
 export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
@@ -55,6 +65,10 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
   onUpdateSwot,
   onRegenerateInsights,
   onAddDirectiveToNotes,
+  onUpdateDirective,
+  onDeleteDirective,
+  onAddDirective,
+  onResetDirectives,
 }) => {
   const [engineTab, setEngineTab] = useState<'phases' | 'directives'>('phases');
   const [filterType, setFilterType] = useState<'all' | 'opportunity' | 'threat'>('all');
@@ -64,6 +78,37 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
   const [addedNoteId, setAddedNoteId] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [expandedPhase, setExpandedPhase] = useState<number | null>(1); // Default phase 1 open
+
+  // Directive editing and adding state
+  const [editingDirectiveId, setEditingDirectiveId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    description: string;
+    actionableDirective: string;
+    category: GeneratedInsight['category'];
+    type: 'opportunity' | 'threat';
+  }>({
+    title: '',
+    description: '',
+    actionableDirective: '',
+    category: 'Tactical Phase',
+    type: 'opportunity',
+  });
+
+  const [isAddingDirective, setIsAddingDirective] = useState(false);
+  const [newForm, setNewForm] = useState<{
+    title: string;
+    description: string;
+    actionableDirective: string;
+    category: GeneratedInsight['category'];
+    type: 'opportunity' | 'threat';
+  }>({
+    title: '',
+    description: '',
+    actionableDirective: '',
+    category: 'Spatial / Half-Spaces',
+    type: 'opportunity',
+  });
 
   const opportunities = insights.filter(i => i.type === 'opportunity');
   const threats = insights.filter(i => i.type === 'threat');
@@ -570,7 +615,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
             ===================================================================== */}
         {engineTab === 'directives' && (
           <div>
-            {/* Filter Bar */}
+            {/* Filter Bar & Controls */}
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               
               {/* Type Filter Buttons */}
@@ -612,12 +657,36 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                 </button>
               </div>
 
-              {/* Category Filter & Search */}
+              {/* Action Buttons: Add Custom & Reset */}
               <div className="flex items-center space-x-2 text-xs">
+                {onAddDirective && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingDirective(!isAddingDirective)}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-md shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Add a custom tactical directive to this match plan"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isAddingDirective ? 'Cancel' : 'Add Directive'}</span>
+                  </button>
+                )}
+                {onResetDirectives && (
+                  <button
+                    type="button"
+                    onClick={onResetDirectives}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Reset to automated AI Engine directives for this match"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Reset Defaults</span>
+                  </button>
+                )}
+
+                {/* Category Filter & Search */}
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 rounded-md px-2.5 py-1 font-semibold focus:outline-hidden focus:border-orange-500"
+                  className="bg-white border border-slate-200 text-slate-700 rounded-md px-2 py-1 font-semibold focus:outline-hidden focus:border-orange-500"
                 >
                   <option value="all">All Categories</option>
                   <option value="Spatial / Half-Spaces">Spatial / Half-Spaces</option>
@@ -634,22 +703,243 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search directives..."
-                    className="pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-hidden focus:border-orange-500 w-36 sm:w-48"
+                    placeholder="Search..."
+                    className="pl-7 pr-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-hidden focus:border-orange-500 w-28 sm:w-36"
                   />
                 </div>
               </div>
             </div>
 
+            {/* Inline Add Directive Form */}
+            {isAddingDirective && onAddDirective && (
+              <div className="p-4 bg-emerald-50/70 border-b border-emerald-200 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-emerald-950 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-emerald-600" />
+                    <span>Create New Tactical Directive</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingDirective(false)}
+                    className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Type</label>
+                    <select
+                      value={newForm.type}
+                      onChange={(e) => setNewForm({ ...newForm, type: e.target.value as 'opportunity' | 'threat' })}
+                      className="w-full bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                    >
+                      <option value="opportunity">Opportunity (Green)</option>
+                      <option value="threat">Threat / Safeguard (Red)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Category</label>
+                    <select
+                      value={newForm.category}
+                      onChange={(e) => setNewForm({ ...newForm, category: e.target.value as any })}
+                      className="w-full bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                    >
+                      <option value="Spatial / Half-Spaces">Spatial / Half-Spaces</option>
+                      <option value="Numerical Overload">Numerical Overload</option>
+                      <option value="Pressing Traps">Pressing Traps</option>
+                      <option value="Defensive Transition">Defensive Transition</option>
+                      <option value="Set Pieces">Set Pieces</option>
+                      <option value="Tactical Phase">Tactical Phase</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Directive Title</label>
+                    <input
+                      type="text"
+                      value={newForm.title}
+                      onChange={(e) => setNewForm({ ...newForm, title: e.target.value })}
+                      placeholder="e.g. Overload Zone 14 against Rival Pivot"
+                      className="w-full bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Observation Description</label>
+                  <textarea
+                    rows={2}
+                    value={newForm.description}
+                    onChange={(e) => setNewForm({ ...newForm, description: e.target.value })}
+                    placeholder="Describe tactical context and structural vulnerability..."
+                    className="w-full bg-white border border-slate-300 rounded p-1.5 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Actionable Coaching Instruction</label>
+                  <input
+                    type="text"
+                    value={newForm.actionableDirective}
+                    onChange={(e) => setNewForm({ ...newForm, actionableDirective: e.target.value })}
+                    placeholder="Explicit instructions for starting lineup..."
+                    className="w-full bg-white border border-slate-300 rounded p-1.5 text-xs"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingDirective(false)}
+                    className="px-3 py-1 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!newForm.title.trim()}
+                    onClick={() => {
+                      if (!newForm.title.trim()) return;
+                      onAddDirective({
+                        id: `custom-dir-${Date.now()}`,
+                        type: newForm.type,
+                        category: newForm.category,
+                        title: newForm.title.trim(),
+                        description: newForm.description.trim() || newForm.title.trim(),
+                        actionableDirective: newForm.actionableDirective.trim() || newForm.title.trim(),
+                      });
+                      setIsAddingDirective(false);
+                      setNewForm({
+                        title: '',
+                        description: '',
+                        actionableDirective: '',
+                        category: 'Spatial / Half-Spaces',
+                        type: 'opportunity',
+                      });
+                    }}
+                    className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded disabled:opacity-50"
+                  >
+                    Save Directive
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Directives Cards List */}
             <div className={`p-4 space-y-3 transition-opacity duration-200 ${isRecalculating ? 'opacity-40' : 'opacity-100'}`}>
               {filteredInsights.length === 0 ? (
                 <div className="text-center py-10 text-slate-400 text-xs">
-                  No tactical directives matching this filter. Click 'Recalculate Analysis' or enter observations in the DAFO text areas above.
+                  No tactical directives matching this filter. Click '+ Add Directive' or 'Reset Defaults' to restore automated directives.
                 </div>
               ) : (
                 filteredInsights.map((insight) => {
                   const isOpportunity = insight.type === 'opportunity';
+                  const isEditing = editingDirectiveId === insight.id;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={insight.id}
+                        className="p-4 rounded-xl border-2 border-orange-400 bg-white shadow-md space-y-3 animate-in fade-in duration-150"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black uppercase text-orange-600 flex items-center gap-1.5">
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>Edit Tactical Directive</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">{insight.id}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Type</label>
+                            <select
+                              value={editForm.type}
+                              onChange={(e) => setEditForm({ ...editForm, type: e.target.value as 'opportunity' | 'threat' })}
+                              className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                            >
+                              <option value="opportunity">Opportunity (Green)</option>
+                              <option value="threat">Threat / Safeguard (Red)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Category</label>
+                            <select
+                              value={editForm.category}
+                              onChange={(e) => setEditForm({ ...editForm, category: e.target.value as any })}
+                              className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                            >
+                              <option value="Spatial / Half-Spaces">Spatial / Half-Spaces</option>
+                              <option value="Numerical Overload">Numerical Overload</option>
+                              <option value="Pressing Traps">Pressing Traps</option>
+                              <option value="Defensive Transition">Defensive Transition</option>
+                              <option value="Set Pieces">Set Pieces</option>
+                              <option value="Tactical Phase">Tactical Phase</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Title</label>
+                            <input
+                              type="text"
+                              value={editForm.title}
+                              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Description</label>
+                          <textarea
+                            rows={2}
+                            value={editForm.description}
+                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-xs leading-relaxed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Actionable Coaching Instruction</label>
+                          <input
+                            type="text"
+                            value={editForm.actionableDirective}
+                            onChange={(e) => setEditForm({ ...editForm, actionableDirective: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-xs font-semibold"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingDirectiveId(null)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!editForm.title.trim()) return;
+                              onUpdateDirective?.({
+                                ...insight,
+                                type: editForm.type,
+                                category: editForm.category,
+                                title: editForm.title.trim(),
+                                description: editForm.description.trim(),
+                                actionableDirective: editForm.actionableDirective.trim(),
+                              });
+                              setEditingDirectiveId(null);
+                            }}
+                            className="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-black rounded flex items-center gap-1 shadow-sm transition-colors"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save Changes</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div
@@ -695,22 +985,51 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                         </div>
 
                         {/* Actions */}
-                        <div className="flex sm:flex-col items-center space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0 self-end sm:self-start">
+                        <div className="flex sm:flex-col items-center space-x-1.5 sm:space-x-0 sm:space-y-1.5 flex-shrink-0 self-end sm:self-start">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDirectiveId(insight.id);
+                              setEditForm({
+                                title: insight.title,
+                                description: insight.description,
+                                actionableDirective: insight.actionableDirective,
+                                category: insight.category,
+                                type: insight.type,
+                              });
+                            }}
+                            className="p-1.5 text-slate-600 hover:text-orange-600 bg-white border border-slate-200 rounded-md transition-colors cursor-pointer"
+                            title="Edit this directive"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {onDeleteDirective && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteDirective(insight.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 bg-white border border-slate-200 rounded-md transition-colors cursor-pointer"
+                              title="Delete directive and remove from report"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => handleAddDirective(insight.id, insight.actionableDirective)}
-                            className="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-orange-600 rounded-md transition-colors shadow-xs"
+                            className="inline-flex items-center px-2 py-1 text-xs font-bold text-white bg-slate-900 hover:bg-orange-600 rounded-md transition-colors shadow-xs"
                             title="Add this directive into match tactical notes"
                           >
                             {addedNoteId === insight.id ? (
                               <>
-                                <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-                                <span>Added!</span>
+                                <Check className="w-3 h-3 mr-1 text-emerald-400" />
+                                <span>Added</span>
                               </>
                             ) : (
                               <>
-                                <PlusCircle className="w-3.5 h-3.5 mr-1" />
-                                <span>Add to Notes</span>
+                                <PlusCircle className="w-3 h-3 mr-1" />
+                                <span>To Notes</span>
                               </>
                             )}
                           </button>
@@ -718,7 +1037,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                           <button
                             type="button"
                             onClick={() => handleCopy(insight.id, insight.actionableDirective)}
-                            className="p-1.5 text-slate-500 hover:text-slate-800 bg-white border border-slate-200 rounded-md transition-colors"
+                            className="p-1 text-slate-500 hover:text-slate-800 bg-white border border-slate-200 rounded-md transition-colors"
                             title="Copy directive text"
                           >
                             {copiedId === insight.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}

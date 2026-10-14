@@ -36,6 +36,8 @@
 
   #match-plan-pdf-document-wrapper {
     position: static !important;
+    left: 0 !important;
+    top: 0 !important;
     z-index: 1 !important;
     width: 100% !important;
     pointer-events: auto !important;

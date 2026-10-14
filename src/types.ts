@@ -136,6 +136,9 @@ export interface MatchPlan {
   showPitchZones: boolean;
   showOpponentTokens: boolean;
   activePitchTool: 'select' | 'arrow' | 'zone';
+  headCoachName?: string;
+  analystName?: string;
+  customDirectives?: GeneratedInsight[];
 }
 
 export interface CampogramToken {
