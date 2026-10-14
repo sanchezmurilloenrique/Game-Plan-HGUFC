@@ -105,8 +105,8 @@ export const TacticalCampogramAnimator: React.FC<TacticalCampogramAnimatorProps>
 
   // 3. Field & Display settings
   const [activeViewFilter, setActiveViewFilter] = useState<'both' | 'hgufc' | 'opponent'>('both');
-  const [labelMode, setLabelMode] = useState<'both' | 'number' | 'name'>('both');
-  const [showMoveVectors, setShowMoveVectors] = useState<boolean>(true);
+  const [labelMode, setLabelMode] = useState<'both' | 'number' | 'name' | 'none'>('both');
+  const [showMoveVectors, setShowMoveVectors] = useState<boolean>(false);
   const [showFieldZones, setShowFieldZones] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<'hgufc' | 'rival' | 'ball' | 'notes'>('hgufc');
@@ -781,17 +781,16 @@ export const TacticalCampogramAnimator: React.FC<TacticalCampogramAnimatorProps>
           ctx.strokeStyle = isGk ? '#facc15' : '#ffffff';
           ctx.stroke();
 
-          ctx.fillStyle = isHgufc ? '#ffffff' : (selectedOpponent.secondaryColor || '#ffffff');
-          ctx.font = 'bold 13px system-ui, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(token.number), px, py - (token.role ? 3 : 0));
-
-          if (token.role) {
-            ctx.font = 'bold 8px monospace';
-            ctx.fillText(token.role, px, py + 8);
+          // Draw player number inside circle (Number only or Number + Name)
+          if (labelMode === 'both' || labelMode === 'number') {
+            ctx.fillStyle = isHgufc ? '#ffffff' : (selectedOpponent.secondaryColor || '#ffffff');
+            ctx.font = 'bold 13px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(token.number), px, py);
           }
 
+          // Name pill badge below token (Name only or Number + Name)
           if (labelMode === 'both' || labelMode === 'name') {
             const surname = token.name.split(' ').slice(-1)[0];
             ctx.font = 'bold 10px system-ui, sans-serif';
@@ -1238,18 +1237,23 @@ export const TacticalCampogramAnimator: React.FC<TacticalCampogramAnimatorProps>
 
             {/* Display options */}
             <div className="flex flex-wrap items-center gap-2">
-              
-              {/* Token labels toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  setLabelMode(prev => prev === 'both' ? 'number' : prev === 'number' ? 'name' : 'both');
-                }}
-                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold hover:bg-slate-50 transition-colors"
-                title="Toggle token labels: Number + Name, Number only, or Name only"
-              >
-                Labels: <span className="text-orange-600 font-extrabold capitalize">{labelMode === 'both' ? 'Number + Name' : labelMode === 'number' ? 'Number Only' : 'Name Only'}</span>
-              </button>
+              {/* Token labels selector */}
+              <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 pl-2 pr-1 select-none">
+                  Labels:
+                </span>
+                <select
+                  value={labelMode}
+                  onChange={(e) => setLabelMode(e.target.value as 'both' | 'number' | 'name' | 'none')}
+                  className="bg-transparent border-0 text-xs font-black text-orange-600 focus:ring-0 cursor-pointer pr-6 py-1 pl-1"
+                  title="Choose player token labels display format"
+                >
+                  <option value="number">Number only</option>
+                  <option value="name">Name only</option>
+                  <option value="both">Number + Name</option>
+                  <option value="none">None (Clean)</option>
+                </select>
+              </div>
 
               {/* Trajectories */}
               <button
@@ -1513,12 +1517,9 @@ export const TacticalCampogramAnimator: React.FC<TacticalCampogramAnimatorProps>
                         color: tokenTextColor,
                       }}
                     >
-                      <span className="text-[12px] sm:text-[13px] font-black leading-none drop-shadow">
-                        {token.number}
-                      </span>
-                      {token.role && (
-                        <span className="text-[8px] font-mono font-bold uppercase opacity-85 leading-none mt-0.5">
-                          {token.role}
+                      {(labelMode === 'both' || labelMode === 'number') && (
+                        <span className="text-[13px] sm:text-[14px] font-black leading-none drop-shadow">
+                          {token.number}
                         </span>
                       )}
                     </div>
