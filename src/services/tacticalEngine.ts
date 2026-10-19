@@ -273,22 +273,23 @@ export function generateMultidimensionalReport(
   const rivalStriker = 
     rivalSquad.find(p => p.position === 'FWD' && (p.number === 9 || p.role?.toUpperCase().includes('S') || p.role?.toUpperCase().includes('CF') || p.role?.toUpperCase().includes('ST'))) ||
     rivalSquad.find(p => p.position === 'FWD') || 
-    { name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Leading Striker`, number: 9 };
+    { id: 'rival-st-default', name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Leading Striker`, number: 9 };
 
   // 2. Rival Winger: wide attacker or wide midfielder - MUST NEVER BE rivalStriker (never duplicate #9!)
   const candidateRivalWinger = 
     rivalSquad.find(p => 
-      (p.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
+      (p.id && 'id' in rivalStriker && rivalStriker.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
       p.number !== rivalStriker.number &&
       (p.role?.toUpperCase().includes('W') || p.role?.toUpperCase().includes('LM') || p.role?.toUpperCase().includes('RM') || p.role?.toUpperCase().includes('LAM') || p.role?.toUpperCase().includes('RAM') || p.position === 'FWD')
     ) ||
     rivalSquad.find(p => 
-      (p.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
+      (p.id && 'id' in rivalStriker && rivalStriker.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
       p.number !== rivalStriker.number &&
       p.position !== 'GK' && p.position !== 'DEF'
     );
 
   let rivalWinger = candidateRivalWinger || { 
+    id: 'rival-w-default',
     name: opponent.id === 'opp-geylang' ? 'Iqbal Hussain' : `${opponent.shortName} Wide Threat`, 
     number: opponent.id === 'opp-geylang' ? 11 : 7 
   };
@@ -301,6 +302,7 @@ export function generateMultidimensionalReport(
       p.position !== 'GK'
     );
     rivalWinger = alternativeRival || { 
+      id: 'rival-w-default-2',
       name: opponent.id === 'opp-geylang' ? 'Iqbal Hussain' : `${opponent.shortName} Wide Winger`, 
       number: opponent.id === 'opp-geylang' ? 11 : 7 
     };
@@ -309,17 +311,17 @@ export function generateMultidimensionalReport(
   // 3. Rival Midfielder: central playmaker or pivot - distinct from striker & winger
   const rivalMid = 
     rivalSquad.find(p => 
-      (p.id ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
+      (p.id && 'id' in rivalStriker && 'id' in rivalWinger ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
       p.number !== rivalStriker.number &&
       p.number !== rivalWinger.number &&
       p.position === 'MID' && 
       (p.role?.toUpperCase().includes('CM') || p.role?.toUpperCase().includes('DM') || p.role?.toUpperCase().includes('CAM') || p.number === 10 || p.number === 8 || p.number === 6)
     ) ||
     rivalSquad.find(p => 
-      (p.id ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
+      (p.id && 'id' in rivalStriker && 'id' in rivalWinger ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
       p.position === 'MID'
     ) ||
-    { name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Central Pivot`, number: 10 };
+    { id: 'rival-mid-default', name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Central Pivot`, number: 10 };
 
   // 4. Rival Central Defender
   const rivalCB = 
@@ -590,7 +592,7 @@ export function generateMultidimensionalReport(
   return {
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     engine: 'Triple-Synthetic AI Framework (Gemini + ChatGPT + Claude)',
-    summary: `Tactical clash evaluation between Hougang United FC (${hName}) and ${oppName} (${rName}) synthesizing on-pitch personnel, footedness profiles, and coach SWOT observations across all 10 mandatory phases of play.`,
+    summary: `Tactical clash evaluation between Hougang United FC (${hName}) and ${oppName} (${rName}) synthesizing on-pitch personnel, footedness profiles, and coach SWOT observations across tactical phases of play.`,
     phases
   };
 }
@@ -669,22 +671,22 @@ export function generateTacticalInsights(
   const rivalKeyAttacker = 
     rivalSquad.find(p => p.position === 'FWD' && (p.number === 9 || p.role?.toUpperCase().includes('S') || p.role?.toUpperCase().includes('CF') || p.role?.toUpperCase().includes('ST'))) ||
     rivalSquad.find(p => p.position === 'FWD') || 
-    { name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Striker`, number: 9 };
+    { id: 'rival-attacker-default', name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Striker`, number: 9 };
 
   // Rival Midfielder: distinct from rivalKeyAttacker
   const rivalMidfielder = 
     rivalSquad.find(p => 
-      (p.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
+      (p.id && 'id' in rivalKeyAttacker && rivalKeyAttacker.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
       p.number !== rivalKeyAttacker.number &&
       p.position === 'MID' && 
       (p.role?.toUpperCase().includes('CM') || p.role?.toUpperCase().includes('CAM') || p.role?.toUpperCase().includes('DM') || p.number === 10 || p.number === 8)
     ) ||
     rivalSquad.find(p => 
-      (p.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
+      (p.id && 'id' in rivalKeyAttacker && rivalKeyAttacker.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
       p.number !== rivalKeyAttacker.number &&
       p.position === 'MID'
     ) ||
-    { name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Playmaker`, number: 10 };
+    { id: 'rival-mid-default-2', name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Playmaker`, number: 10 };
 
   // Rival Defender: central defender distinct from attackers
   const rivalDefender = 
@@ -693,7 +695,7 @@ export function generateTacticalInsights(
       (p.role?.toUpperCase().includes('CB') || p.role?.toUpperCase().includes('CD') || p.role?.toUpperCase().includes('RCB') || p.role?.toUpperCase().includes('LCB') || p.number === 3 || p.number === 4)
     ) ||
     rivalSquad.find(p => p.position === 'DEF') || 
-    { name: opponent.id === 'opp-geylang' ? 'Rio Sakuma' : `${opponent.shortName} Defender`, number: 3 };
+    { id: 'rival-def-default', name: opponent.id === 'opp-geylang' ? 'Rio Sakuma' : `${opponent.shortName} Defender`, number: 3 };
 
   const hName = hgufcFormation.name;
   const rName = rivalFormation.name;

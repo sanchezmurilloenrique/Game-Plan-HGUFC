@@ -36,6 +36,7 @@ import {
   Player,
   TacticalPhaseAnalysis
 } from '../types';
+import { PhaseModal } from './PhaseModal';
 
 interface SwotAnalysisProps {
   swot: SwotData;
@@ -45,6 +46,12 @@ interface SwotAnalysisProps {
   insights: GeneratedInsight[];
   report: MultidimensionalReport;
   players?: Player[];
+  phasesSectionTitle?: string;
+  onUpdatePhasesSectionTitle?: (title: string) => void;
+  onUpdatePhase?: (updated: TacticalPhaseAnalysis) => void;
+  onDeletePhase?: (phaseKey: string) => void;
+  onAddPhase?: (newPhase: TacticalPhaseAnalysis) => void;
+  onResetPhases?: () => void;
   onUpdateSwot: (updated: Partial<SwotData>) => void;
   onRegenerateInsights: () => void;
   onAddDirectiveToNotes: (directive: string) => void;
@@ -62,6 +69,12 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
   insights,
   report,
   players = [],
+  phasesSectionTitle,
+  onUpdatePhasesSectionTitle,
+  onUpdatePhase,
+  onDeletePhase,
+  onAddPhase,
+  onResetPhases,
   onUpdateSwot,
   onRegenerateInsights,
   onAddDirectiveToNotes,
@@ -78,6 +91,12 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
   const [addedNoteId, setAddedNoteId] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [expandedPhase, setExpandedPhase] = useState<number | null>(1); // Default phase 1 open
+
+  // Phase modal & Title editing state
+  const [isPhaseModalOpen, setIsPhaseModalOpen] = useState(false);
+  const [phaseToEdit, setPhaseToEdit] = useState<TacticalPhaseAnalysis | null>(null);
+  const [isEditingPhasesTitle, setIsEditingPhasesTitle] = useState(false);
+  const [tempPhasesTitle, setTempPhasesTitle] = useState(phasesSectionTitle || 'Tactical Phases of Play');
 
   // Directive editing and adding state
   const [editingDirectiveId, setEditingDirectiveId] = useState<string | null>(null);
@@ -306,7 +325,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Integrated Triple-Synthetic Framework across the <strong className="text-orange-400">10 Mandatory Phases of Play</strong> synthesizing active players ({onPitchCount}/11 on pitch), footedness, and SWOT.
+                Integrated Triple-Synthetic Framework across <strong className="text-orange-400">{phasesSectionTitle || 'Tactical Phases of Play'}</strong> synthesizing active players ({onPitchCount}/11 on pitch), footedness, and SWOT.
               </p>
             </div>
           </div>
@@ -364,8 +383,8 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>10 Mandatory Phases of Play</span>
-              <span className="ml-1 text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.2 rounded-full font-bold">10</span>
+              <span>{phasesSectionTitle || 'Tactical Phases of Play'}</span>
+              <span className="ml-1 text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.2 rounded-full font-bold">{report.phases.length}</span>
             </button>
 
             <button
@@ -390,20 +409,107 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
 
 
         {/* =====================================================================
-            VIEW 1: 10 MANDATORY PHASES OF PLAY
+            VIEW 1: TACTICAL PHASES OF PLAY (CUSTOMIZABLE, EDITABLE, DELETABLE)
             ===================================================================== */}
         {engineTab === 'phases' && (
           <div className="p-4 sm:p-5 space-y-4">
             
+            {/* Title Customizer & Phase Action Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center space-x-2.5">
+                {isEditingPhasesTitle ? (
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={tempPhasesTitle}
+                      onChange={(e) => setTempPhasesTitle(e.target.value)}
+                      className="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-50 border border-orange-500 rounded-lg focus:outline-hidden focus:bg-white"
+                      placeholder="e.g. Tactical Phases of Play"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdatePhasesSectionTitle?.(tempPhasesTitle.trim() || 'Tactical Phases of Play');
+                        setIsEditingPhasesTitle(false);
+                      }}
+                      className="px-2.5 py-1 text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-md cursor-pointer"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempPhasesTitle(phasesSectionTitle || 'Tactical Phases of Play');
+                        setIsEditingPhasesTitle(false);
+                      }}
+                      className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded-md cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-orange-600"></div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                      {phasesSectionTitle || 'Tactical Phases of Play'}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempPhasesTitle(phasesSectionTitle || 'Tactical Phases of Play');
+                        setIsEditingPhasesTitle(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-orange-600 rounded transition-colors cursor-pointer"
+                      title="Editar título del informe"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <span className="text-[10px] font-bold bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
+                  {report.phases.length} {report.phases.length === 1 ? 'Fase' : 'Fases'}
+                </span>
+              </div>
+
+              {/* Action Buttons: Añadir Fase + Restablecer */}
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhaseToEdit(null);
+                    setIsPhaseModalOpen(true);
+                  }}
+                  className="inline-flex items-center px-3.5 py-1.5 text-xs font-black text-white bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 rounded-lg shadow-xs transition-all cursor-pointer"
+                  title="Añadir nueva fase táctica al informe"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  <span>Añadir Fase</span>
+                </button>
+
+                {onResetPhases && (
+                  <button
+                    type="button"
+                    onClick={onResetPhases}
+                    className="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                    title="Restablecer fases a los valores por defecto del motor"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    <span className="hidden sm:inline">Restablecer</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Quick Phase Jump Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
-              <span className="text-[11px] font-bold text-slate-400 mr-1 flex-shrink-0">Jump to Phase:</span>
+              <span className="text-[11px] font-bold text-slate-400 mr-1 flex-shrink-0">Ir a Fase:</span>
               {report.phases.map((phase) => (
                 <button
                   key={phase.phaseKey}
                   type="button"
                   onClick={() => setExpandedPhase(expandedPhase === phase.phaseNumber ? null : phase.phaseNumber)}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md flex-shrink-0 transition-colors ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md flex-shrink-0 transition-colors cursor-pointer ${
                     expandedPhase === phase.phaseNumber
                       ? 'bg-orange-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -414,55 +520,101 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
               ))}
             </div>
 
-            {/* List of 10 Phases */}
+            {/* List of Phases with Edit & Delete Controls */}
             <div className={`space-y-4 transition-opacity duration-200 ${isRecalculating ? 'opacity-40' : 'opacity-100'}`}>
-              {report.phases.map((phase) => {
-                const isExpanded = expandedPhase === phase.phaseNumber;
-
-                return (
-                  <div 
-                    key={phase.phaseKey}
-                    className={`rounded-xl border transition-all ${
-                      isExpanded 
-                        ? 'border-orange-300 bg-white shadow-sm ring-1 ring-orange-200/50' 
-                        : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
+              {report.phases.length === 0 ? (
+                <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <p className="text-sm font-bold text-slate-500">No hay fases en el informe actualmente.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhaseToEdit(null);
+                      setIsPhaseModalOpen(true);
+                    }}
+                    className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-orange-600 rounded-lg"
                   >
-                    {/* Phase Header Accordion Trigger */}
-                    <div 
-                      onClick={() => setExpandedPhase(isExpanded ? null : phase.phaseNumber)}
-                      className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
-                          isExpanded ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-700'
-                        }`}>
-                          {phase.phaseNumber}
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-sm font-black text-slate-900 tracking-wide">
-                              {phase.phaseName}
-                            </h4>
-                            <span className="text-[11px] text-slate-500 hidden sm:inline">
-                              — {phase.subtitle}
-                            </span>
-                          </div>
-                          {!isExpanded && (
-                            <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                              <strong>Recommendation:</strong> {phase.directTacticalRecommendation}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                    <Plus className="w-4 h-4 mr-1" />
+                    <span>Añadir Primera Fase</span>
+                  </button>
+                </div>
+              ) : (
+                report.phases.map((phase) => {
+                  const isExpanded = expandedPhase === phase.phaseNumber;
 
-                      <div className="flex items-center space-x-2 text-slate-400">
-                        <span className="text-[11px] font-semibold hidden md:inline text-slate-500">
-                          {isExpanded ? 'Collapse' : 'Expand Phase'}
-                        </span>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-orange-600" /> : <ChevronDown className="w-4 h-4" />}
+                  return (
+                    <div 
+                      key={phase.phaseKey}
+                      className={`rounded-xl border transition-all ${
+                        isExpanded 
+                          ? 'border-orange-300 bg-white shadow-sm ring-1 ring-orange-200/50' 
+                          : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* Phase Header Accordion Trigger */}
+                      <div 
+                        onClick={() => setExpandedPhase(isExpanded ? null : phase.phaseNumber)}
+                        className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                            isExpanded ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {phase.phaseNumber}
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-sm font-black text-slate-900 tracking-wide">
+                                {phase.phaseName}
+                              </h4>
+                              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                                — {phase.subtitle}
+                              </span>
+                            </div>
+                            {!isExpanded && (
+                              <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                                <strong>Recomendación:</strong> {phase.directTacticalRecommendation}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {/* Botón Editar */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhaseToEdit(phase);
+                              setIsPhaseModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:text-orange-600 hover:bg-orange-50 bg-white border border-slate-200 rounded-md transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                            title="Editar fase del informe"
+                          >
+                            <Edit2 className="w-3 h-3 text-orange-600" />
+                            <span className="hidden sm:inline">Editar</span>
+                          </button>
+
+                          {/* Botón Borrar */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`¿Seguro que deseas eliminar la fase "${phase.phaseName}" del informe?`)) {
+                                onDeletePhase?.(phase.phaseKey);
+                              }
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold text-red-600 hover:text-red-700 hover:bg-red-50 bg-white border border-red-200 rounded-md transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                            title="Borrar fase del informe"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span className="hidden sm:inline">Borrar</span>
+                          </button>
+
+                          <div className="text-slate-400 pl-1">
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-orange-600" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
                     {/* Expanded Content with 3 Perspectives */}
                     {isExpanded && (
@@ -603,7 +755,7 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
 
           </div>
@@ -1055,6 +1207,24 @@ export const SwotAnalysis: React.FC<SwotAnalysisProps> = ({
 
       </div>
 
+      {/* TACTICAL PHASE EDIT/ADD MODAL */}
+      <PhaseModal
+        isOpen={isPhaseModalOpen}
+        phaseToEdit={phaseToEdit}
+        nextPhaseNumber={report.phases.length + 1}
+        onClose={() => {
+          setIsPhaseModalOpen(false);
+          setPhaseToEdit(null);
+        }}
+        onSavePhase={(savedPhase) => {
+          if (phaseToEdit) {
+            onUpdatePhase?.(savedPhase);
+          } else {
+            onAddPhase?.(savedPhase);
+          }
+        }}
+        onDeletePhase={onDeletePhase}
+      />
     </div>
   );
 };

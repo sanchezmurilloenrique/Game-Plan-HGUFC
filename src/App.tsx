@@ -16,7 +16,8 @@ import {
   GeneratedInsight,
   OpponentPlayer,
   MultidimensionalReport,
-  CampogramPlay
+  CampogramPlay,
+  TacticalPhaseAnalysis
 } from './types';
 import { DEFAULT_CAMPOGRAM_PLAYS } from './data/campogramPresets';
 import { 
@@ -344,8 +345,8 @@ export default function App() {
 
   const [recalculateNonce, setRecalculateNonce] = useState(0);
 
-  // Multidimensional Tactical Analysis (10 Phases of Play: Gemini + ChatGPT + Claude)
-  const multidimensionalReport: MultidimensionalReport = useMemo(() => {
+  // Multidimensional Tactical Analysis (respects custom phases and custom section title)
+  const baseMultidimensionalReport: MultidimensionalReport = useMemo(() => {
     return generateMultidimensionalReport(
       currentHgufcFormation,
       currentRivalFormation,
@@ -354,6 +355,75 @@ export default function App() {
       players
     );
   }, [currentHgufcFormation, currentRivalFormation, currentOpponent, matchPlan.swot, players, recalculateNonce]);
+
+  const multidimensionalReport: MultidimensionalReport = useMemo(() => {
+    if (matchPlan.customPhases && Array.isArray(matchPlan.customPhases)) {
+      return {
+        ...baseMultidimensionalReport,
+        phases: matchPlan.customPhases,
+      };
+    }
+    return baseMultidimensionalReport;
+  }, [matchPlan.customPhases, baseMultidimensionalReport]);
+
+  const handleUpdatePhase = useCallback((updated: TacticalPhaseAnalysis) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customPhases && Array.isArray(prev.customPhases)
+        ? prev.customPhases
+        : baseMultidimensionalReport.phases;
+      const nextList = currentList.map(p => p.phaseKey === updated.phaseKey ? updated : p);
+      return {
+        ...prev,
+        customPhases: nextList,
+      };
+    });
+    showToast('Fase actualizada para el informe', 'success');
+  }, [baseMultidimensionalReport.phases, showToast]);
+
+  const handleDeletePhase = useCallback((phaseKey: string) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customPhases && Array.isArray(prev.customPhases)
+        ? prev.customPhases
+        : baseMultidimensionalReport.phases;
+      const nextList = currentList.filter(p => p.phaseKey !== phaseKey);
+      return {
+        ...prev,
+        customPhases: nextList,
+      };
+    });
+    showToast('Fase eliminada del informe', 'info');
+  }, [baseMultidimensionalReport.phases, showToast]);
+
+  const handleAddPhase = useCallback((newPhase: TacticalPhaseAnalysis) => {
+    setMatchPlan(prev => {
+      const currentList = prev.customPhases && Array.isArray(prev.customPhases)
+        ? prev.customPhases
+        : baseMultidimensionalReport.phases;
+      return {
+        ...prev,
+        customPhases: [...currentList, newPhase],
+      };
+    });
+    showToast('Nueva fase añadida al informe', 'success');
+  }, [baseMultidimensionalReport.phases, showToast]);
+
+  const handleResetPhases = useCallback(() => {
+    setMatchPlan(prev => ({
+      ...prev,
+      customPhases: undefined,
+      phasesSectionTitle: undefined,
+    }));
+    setRecalculateNonce(n => n + 1);
+    showToast('Fases tácticas restablecidas a las del motor IA', 'info');
+  }, [showToast]);
+
+  const handleUpdatePhasesSectionTitle = useCallback((title: string) => {
+    setMatchPlan(prev => ({
+      ...prev,
+      phasesSectionTitle: title,
+    }));
+    showToast('Título del informe actualizado', 'success');
+  }, [showToast]);
 
   // Automated Threats & Opportunities Insights Engine
   const baseTacticalInsights: GeneratedInsight[] = useMemo(() => {
@@ -424,7 +494,7 @@ export default function App() {
     showToast('Reset directives to AI Engine defaults', 'info');
   }, [showToast]);
 
-  // Auto-Assign 11 Starting Players to Formation Positions
+  // Auto-Assign 11 Starting Players to Formation Positions with intelligent role & sub-position matching
   const assignStartingXIToFormation = useCallback((formation: Formation) => {
     setPlayers(prevPlayers => {
       // Clear current pitch coords
@@ -436,30 +506,103 @@ export default function App() {
       }));
 
       const newPlayers: Player[] = [...unassigned];
+      const assignedIds = new Set<string>();
 
       // Step 1: Assign GK (1 spot)
       const gkPos = formation.positions.find(p => p.position === 'GK') || formation.positions[0];
       const availableGK = newPlayers.find(p => p.position === 'GK');
-      if (availableGK) {
+      if (availableGK && gkPos) {
         availableGK.pitchX = gkPos.x;
         availableGK.pitchY = gkPos.y;
         availableGK.roleLabel = gkPos.role;
+        assignedIds.add(availableGK.id);
       }
 
-      // Step 2: Assign remaining 10 outfield spots
+      // Step 2: Intelligent sub-role matching for outfield positions
       const outfieldFormationSlots = formation.positions.filter(p => p.position !== 'GK');
       
-      outfieldFormationSlots.forEach(slot => {
-        // Try matching position (DEF / MID / FWD)
-        let candidate = newPlayers.find(p => p.position === slot.position && p.pitchX === undefined);
-        // Fallback to any available outfield player
-        if (!candidate) {
-          candidate = newPlayers.find(p => p.position !== 'GK' && p.pitchX === undefined);
+      const findBestMatch = (slot: { role: string; position: string; x: number; y: number }) => {
+        const roleUpper = slot.role.toUpperCase();
+        const availableInPosition = newPlayers.filter(p => p.position === slot.position && !assignedIds.has(p.id));
+        
+        // Match DEF slots
+        if (slot.position === 'DEF') {
+          if (roleUpper.includes('CB') || roleUpper.includes('CD')) {
+            const cb = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('center-back') || 
+              (p.notes || '').toLowerCase().includes('central defender') ||
+              p.name.includes('Aplin') || p.name.includes('Takayama') || p.name.includes('Drincic') || p.name.includes('Irfan')
+            );
+            if (cb) return cb;
+          } else if (roleUpper.includes('LB') || (roleUpper.includes('WB') && slot.x < 30)) {
+            const lb = availableInPosition.find(p => 
+              p.preferredFoot === 'Left' || 
+              (p.notes || '').toLowerCase().includes('left') || 
+              p.name.includes('Zulkifli') || p.name.includes('Vestering')
+            );
+            if (lb) return lb;
+          } else if (roleUpper.includes('RB') || (roleUpper.includes('WB') && slot.x > 70)) {
+            const rb = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('right') || 
+              p.name.includes('Nazrul') || p.name.includes('Akhbar')
+            );
+            if (rb) return rb;
+          }
+        } 
+        // Match MID slots
+        else if (slot.position === 'MID') {
+          if (roleUpper.includes('DM') || roleUpper.includes('6') || roleUpper.includes('PIVOT')) {
+            const pivot = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('holding') || 
+              (p.notes || '').toLowerCase().includes('deep-lying') || 
+              p.name.includes('Shahdan') || p.name.includes('Jupri')
+            );
+            if (pivot) return pivot;
+          } else if (roleUpper.includes('AM') || roleUpper.includes('10') || roleUpper.includes('CAM')) {
+            const am = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('creative') || 
+              (p.notes || '').toLowerCase().includes('playmaker') || 
+              p.name.includes('Krajcek') || p.name.includes('Zulfahmi')
+            );
+            if (am) return am;
+          }
+        } 
+        // Match FWD slots
+        else if (slot.position === 'FWD') {
+          if (roleUpper.includes('ST') || roleUpper.includes('CF') || roleUpper.includes('S')) {
+            const st = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('striker') || 
+              (p.notes || '').toLowerCase().includes('finisher') || 
+              (p.notes || '').toLowerCase().includes('poacher') ||
+              p.name.includes('Sliskovic') || p.name.includes('Racic') || p.name.includes('Sahil')
+            );
+            if (st) return st;
+          } else if (roleUpper.includes('W') || roleUpper.includes('LM') || roleUpper.includes('RM')) {
+            const winger = availableInPosition.find(p => 
+              (p.notes || '').toLowerCase().includes('winger') || 
+              (p.notes || '').toLowerCase().includes('wide') || 
+              p.name.includes('Quak') || p.name.includes('Zalani') || p.name.includes('Vaissierre')
+            );
+            if (winger) return winger;
+          }
         }
+
+        // Fallback to any player in exact positional category
+        if (availableInPosition.length > 0) {
+          return availableInPosition[0];
+        }
+
+        // Fallback to any unassigned outfield player
+        return newPlayers.find(p => p.position !== 'GK' && !assignedIds.has(p.id));
+      };
+
+      outfieldFormationSlots.forEach(slot => {
+        const candidate = findBestMatch(slot);
         if (candidate) {
           candidate.pitchX = slot.x;
           candidate.pitchY = slot.y;
           candidate.roleLabel = slot.role;
+          assignedIds.add(candidate.id);
         }
       });
 
@@ -1013,6 +1156,12 @@ export default function App() {
             insights={tacticalInsights}
             report={multidimensionalReport}
             players={players}
+            phasesSectionTitle={matchPlan.phasesSectionTitle}
+            onUpdatePhasesSectionTitle={handleUpdatePhasesSectionTitle}
+            onUpdatePhase={handleUpdatePhase}
+            onDeletePhase={handleDeletePhase}
+            onAddPhase={handleAddPhase}
+            onResetPhases={handleResetPhases}
             onUpdateSwot={(updated) => {
               setMatchPlan(prev => ({
                 ...prev,

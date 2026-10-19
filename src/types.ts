@@ -139,6 +139,8 @@ export interface MatchPlan {
   headCoachName?: string;
   analystName?: string;
   customDirectives?: GeneratedInsight[];
+  phasesSectionTitle?: string;
+  customPhases?: TacticalPhaseAnalysis[];
 }
 
 export interface CampogramToken {

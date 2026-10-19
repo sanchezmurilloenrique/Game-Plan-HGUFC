@@ -135,7 +135,10 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
   const threats = insights.filter(i => i.type === 'threat');
 
   // Split phases into clean chunks of 2 phases per page for comfortable, spacious reading
-  const phases = report?.phases || [];
+  const phases = matchPlan.customPhases && Array.isArray(matchPlan.customPhases)
+    ? matchPlan.customPhases
+    : (report?.phases || []);
+  const phasesSectionTitle = matchPlan.phasesSectionTitle || 'Tactical Phases of Play';
   const phasesPerChunk = 2;
   const phaseChunks: TacticalPhaseAnalysis[][] = [];
   for (let i = 0; i < phases.length; i += phasesPerChunk) {
@@ -146,7 +149,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
   // Page 1: Match Overview & Pitch Formation
   // Page 2: Strategic SWOT Matrix & Automated Directives
   // Page 3: 6 Tactical Phase Instructions Playbook
-  // Pages 4+: Triple-Synthetic 10 Phases of Play (2 phases per page)
+  // Pages 4+: Triple-Synthetic Phases of Play (2 phases per page)
   const totalPages = 3 + (phaseChunks.length > 0 ? phaseChunks.length : 0);
 
   return (
@@ -757,7 +760,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
               {/* Running Page Header */}
               <SubPageHeader 
                 sectionNumber="Part 4"
-                sectionTitle={`10 Phases of Play — Phases ${firstPhase.phaseNumber} & ${lastPhase.phaseNumber}`}
+                sectionTitle={`${phasesSectionTitle} — ${firstPhase.phaseName.replace(/^\d+\.\s*/, '')} & ${lastPhase.phaseName.replace(/^\d+\.\s*/, '')}`}
                 subtitle="Triple-Synthetic Framework: Gemini (Geometry) • ChatGPT (Profiles) • Claude (Operational SWOT)"
                 pageNum={pageNum}
                 totalPages={totalPages}
@@ -786,7 +789,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                         </span>
                       </div>
                       <span className="text-[8.5px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded whitespace-nowrap">
-                        Phase {phase.phaseNumber} of 10
+                        Phase {phase.phaseNumber} of {phases.length}
                       </span>
                     </div>
 
