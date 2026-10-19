@@ -50,7 +50,7 @@ export const INITIAL_PLAYERS: Player[] = [
   { id: 'p-27', name: 'Shahril Ishak', number: 19, position: 'FWD', preferredFoot: 'Right', notes: 'Tactical veteran forward, exceptional penalty box movement' },
   { id: 'p-28', name: 'Amir Zalani', number: 21, position: 'FWD', preferredFoot: 'Right', notes: 'Pacy wide forward, runs in behind opponent high defensive lines' },
   { id: 'p-29', name: 'Louka Vaissierre', number: 23, position: 'FWD', preferredFoot: 'Left', notes: 'Tricky dribbler, wins fouls in advanced attacking third' },
-  { id: 'p-30', name: 'Sahil Suhaimi', number: 13, position: 'FWD', preferredFoot: 'Right', notes: 'Instinctive poacher, dangerous on second-ball rebounds' },
+  { id: 'p-30', name: 'Sahil Suhaimi', number: 32, position: 'FWD', preferredFoot: 'Right', notes: 'Instinctive poacher, versatile striker/winger, dangerous on second-ball rebounds' },
 ];
 
 export const INITIAL_FORMATIONS: Formation[] = [
@@ -318,7 +318,7 @@ export const INITIAL_OPPONENTS: OpponentTeam[] = [
       'Inconsistent concentration in defensive transition after losing possession',
       'Defensive lapses during early phases of second half'
     ],
-    keyPlayers: ['Tomoya Taniguchi', 'Vincent Bezecourt', 'Takahiro Tezuka'],
+    keyPlayers: ['Ryoya Taniguchi', 'Vincent Bezecourt', 'Takahiro Tezuka'],
     players: [
       { id: 'gey-1', name: 'Rudy Khairullah', number: 1, position: 'GK', role: 'GK' },
       { id: 'gey-2', name: 'Ahmad Syahir', number: 2, position: 'DEF', role: 'RB' },
@@ -329,7 +329,7 @@ export const INITIAL_OPPONENTS: OpponentTeam[] = [
       { id: 'gey-7', name: 'Vincent Bezecourt', number: 10, position: 'MID', role: 'RCM' },
       { id: 'gey-8', name: 'Joshua Pereira', number: 6, position: 'MID', role: 'LCM' },
       { id: 'gey-9', name: 'Iqbal Hussain', number: 11, position: 'MID', role: 'LM' },
-      { id: 'gey-10', name: 'Tomoya Taniguchi', number: 9, position: 'FWD', role: 'RS' },
+      { id: 'gey-10', name: 'Ryoya Taniguchi', number: 9, position: 'FWD', role: 'RS' },
       { id: 'gey-11', name: 'Zikos Chua', number: 19, position: 'FWD', role: 'LS' },
     ]
   },

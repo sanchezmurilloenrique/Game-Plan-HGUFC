@@ -60,10 +60,48 @@ export function extractPlayerClusters(players: Player[] = []): PlayerCluster {
     return p.pitchX !== undefined && (p.pitchX < 26 || p.pitchX > 74);
   });
 
-  const midfieldPivots = active.filter(p => p.position === 'MID' && (p.roleLabel?.includes('DM') || p.roleLabel?.includes('Pivot') || p.roleLabel?.includes('CM')));
-  const attackingMidfielders = active.filter(p => p.position === 'MID' && (p.roleLabel?.includes('AM') || p.roleLabel?.includes('10')));
-  const wingers = active.filter(p => p.position === 'FWD' && (p.roleLabel?.includes('W') || (p.pitchX !== undefined && (p.pitchX <= 30 || p.pitchX >= 70))));
-  const strikers = active.filter(p => p.position === 'FWD' && (!p.roleLabel || p.roleLabel.includes('CF') || p.roleLabel.includes('ST') || (p.pitchX !== undefined && p.pitchX > 30 && p.pitchX < 70)));
+  const allActiveMids = active.filter(p => p.position === 'MID');
+  const allActiveFwds = active.filter(p => p.position === 'FWD');
+
+  // Strikers: central forwards (CF, ST, RS, LS, or central corridor)
+  const strikers = allActiveFwds.filter(p => {
+    const role = (p.roleLabel || '').toUpperCase();
+    if (role.includes('CF') || role.includes('ST') || role.includes('RS') || role.includes('LS')) return true;
+    if (role.includes('W') || role.includes('LAM') || role.includes('RAM') || role.includes('LM') || role.includes('RM')) return false;
+    return p.pitchX !== undefined && p.pitchX >= 32 && p.pitchX <= 68;
+  });
+
+  // Wingers: wide forwards or wide attacking midfielders (never duplicate central striker)
+  const strikerIds = new Set(strikers.map(s => s.id));
+  const wingers = [
+    ...allActiveFwds.filter(p => {
+      if (strikerIds.has(p.id)) return false;
+      const role = (p.roleLabel || '').toUpperCase();
+      if (role.includes('W') || role.includes('LF') || role.includes('RF')) return true;
+      return p.pitchX !== undefined && (p.pitchX < 32 || p.pitchX > 68);
+    }),
+    ...allActiveMids.filter(p => {
+      const role = (p.roleLabel || '').toUpperCase();
+      return (role.includes('W') || role.includes('LM') || role.includes('RM') || role.includes('LAM') || role.includes('RAM')) &&
+        (p.pitchX !== undefined && (p.pitchX < 32 || p.pitchX > 68));
+    })
+  ];
+
+  // Midfield Pivots: defensive / central midfielders (DM, CM, 6, 8)
+  const midfieldPivots = allActiveMids.filter(p => {
+    const role = (p.roleLabel || '').toUpperCase();
+    if (role.includes('DM') || role.includes('PIVOT') || role.includes('CDM') || role.includes('RDM') || role.includes('LDM') || role.includes('6')) return true;
+    if (role.includes('AM') || role.includes('CAM') || role.includes('10')) return false;
+    return p.pitchY !== undefined && p.pitchY >= 50;
+  });
+
+  // Attacking Midfielders: creative #10s, advanced playmakers
+  const attackingMidfielders = allActiveMids.filter(p => {
+    const role = (p.roleLabel || '').toUpperCase();
+    if (role.includes('AM') || role.includes('CAM') || role.includes('10') || role.includes('LAM') || role.includes('RAM')) return true;
+    if (role.includes('DM') || role.includes('CDM') || role.includes('PIVOT') || role.includes('6')) return false;
+    return p.pitchY !== undefined && p.pitchY < 50;
+  });
 
   // Detect inverted players (e.g. Left-footed playing right side or explicit notes/role)
   const invertedPlayers = active.filter(p => {
@@ -80,10 +118,10 @@ export function extractPlayerClusters(players: Player[] = []): PlayerCluster {
     goalkeeper,
     centralDefenders: centralDefenders.length > 0 ? centralDefenders : allActiveDefenders.slice(0, 2),
     fullbacks: fullbacks.length > 0 ? fullbacks : allActiveDefenders.slice(2, 4),
-    midfieldPivots: midfieldPivots.length > 0 ? midfieldPivots : active.filter(p => p.position === 'MID').slice(0, 2),
-    attackingMidfielders: attackingMidfielders.length > 0 ? attackingMidfielders : active.filter(p => p.position === 'MID').slice(1, 2),
-    wingers: wingers.length > 0 ? wingers : active.filter(p => p.position === 'FWD').slice(1, 3),
-    strikers: strikers.length > 0 ? strikers : active.filter(p => p.position === 'FWD').slice(0, 1),
+    midfieldPivots: midfieldPivots.length > 0 ? midfieldPivots : allActiveMids.slice(0, 2),
+    attackingMidfielders: attackingMidfielders.length > 0 ? attackingMidfielders : allActiveMids.slice(1, 2),
+    wingers: wingers.length > 0 ? wingers : allActiveFwds.slice(1, 3),
+    strikers: strikers.length > 0 ? strikers : allActiveFwds.slice(0, 1),
     invertedPlayers,
     allActive: active,
   };
@@ -104,8 +142,12 @@ export function generateMultidimensionalReport(
 
   const allActiveDefenders = clusters.allActive.filter(p => p.position === 'DEF');
   const allSquadDefenders = players.filter(p => p.position === 'DEF');
+  const allActiveMids = clusters.allActive.filter(p => p.position === 'MID');
+  const allSquadMids = players.filter(p => p.position === 'MID');
+  const allActiveFwds = clusters.allActive.filter(p => p.position === 'FWD');
+  const allSquadFwds = players.filter(p => p.position === 'FWD');
 
-  // Key Player References - strictly unique pairs
+  // Key Player References - strictly unique pairs for central defenders
   const leadCB = centralDefenders[0] || allActiveDefenders[0] || allSquadDefenders[0] || { id: 'cb-1', name: 'Lead Center-Back', number: 4, preferredFoot: 'Right' };
 
   // secondCB must ALWAYS be distinct from leadCB (never duplicate the same player)
@@ -162,18 +204,131 @@ export function generateMultidimensionalReport(
     };
   }
 
-  const leadPivot = midfieldPivots[0] || { name: 'Holding Midfielder', number: 6, preferredFoot: 'Right' };
-  const creativeMid = clusters.attackingMidfielders[0] || midfieldPivots[1] || { name: 'Creative Midfielder', number: 10, preferredFoot: 'Right' };
-  const leadStriker = strikers[0] || { name: 'Main Striker', number: 9, preferredFoot: 'Right' };
-  const primaryWinger = wingers[0] || { name: 'Direct Winger', number: 11, preferredFoot: 'Right' };
+  // Midfield Pair: Holding Pivot vs Creative Midfielder - strictly unique pair
+  const leadPivot = 
+    midfieldPivots[0] || 
+    allActiveMids.find(p => !p.roleLabel?.toUpperCase().includes('AM')) || 
+    allActiveMids[0] || 
+    allSquadMids[0] || 
+    { id: 'mid-1', name: 'Shahdan Sulaiman', number: 8, preferredFoot: 'Right' };
 
-  // Rival Key Players
+  const candidateCreativeMid = 
+    clusters.attackingMidfielders.find(p => (p.id ? p.id !== leadPivot.id : p.name.trim().toLowerCase() !== leadPivot.name.trim().toLowerCase())) ||
+    midfieldPivots.find(p => (p.id ? p.id !== leadPivot.id : p.name.trim().toLowerCase() !== leadPivot.name.trim().toLowerCase())) ||
+    allActiveMids.find(p => (p.id ? p.id !== leadPivot.id : p.name.trim().toLowerCase() !== leadPivot.name.trim().toLowerCase())) ||
+    allSquadMids.find(p => (p.id ? p.id !== leadPivot.id : p.name.trim().toLowerCase() !== leadPivot.name.trim().toLowerCase()));
+
+  let creativeMid = candidateCreativeMid || {
+    id: 'mid-2',
+    name: leadPivot.name.includes('Krajcek') ? 'Zulfahmi Arifin' : 'Kristijan Krajcek',
+    number: leadPivot.number === 10 ? 7 : 10,
+    preferredFoot: 'Left'
+  };
+
+  if (creativeMid.name.trim().toLowerCase() === leadPivot.name.trim().toLowerCase()) {
+    const alternativeMid = allSquadMids.find(p => p.name.trim().toLowerCase() !== leadPivot.name.trim().toLowerCase());
+    creativeMid = alternativeMid || {
+      id: 'mid-2-fallback',
+      name: leadPivot.name.includes('Krajcek') ? 'Zulfahmi Arifin' : 'Kristijan Krajcek',
+      number: leadPivot.number === 10 ? 7 : 10,
+      preferredFoot: 'Left'
+    };
+  }
+
+  // Attacking Pair: Lead Striker vs Primary Winger - strictly unique pair (Sahil Suhaimi #32 duplicate protection)
+  const leadStriker = 
+    strikers[0] || 
+    allActiveFwds.find(p => !p.roleLabel?.toUpperCase().includes('W')) || 
+    allActiveFwds[0] || 
+    allSquadFwds[0] || 
+    { id: 'st-1', name: 'Sahil Suhaimi', number: 32, preferredFoot: 'Right' };
+
+  const candidatePrimaryWinger = 
+    wingers.find(p => (p.id ? p.id !== leadStriker.id : p.name.trim().toLowerCase() !== leadStriker.name.trim().toLowerCase())) ||
+    allActiveFwds.find(p => (p.id ? p.id !== leadStriker.id : p.name.trim().toLowerCase() !== leadStriker.name.trim().toLowerCase())) ||
+    allActiveMids.find(p => (p.id ? p.id !== leadStriker.id : p.name.trim().toLowerCase() !== leadStriker.name.trim().toLowerCase()) && (p.roleLabel?.toUpperCase().includes('W') || p.roleLabel?.toUpperCase().includes('M') || (p.pitchX !== undefined && (p.pitchX <= 32 || p.pitchX >= 68)))) ||
+    allSquadFwds.find(p => (p.id ? p.id !== leadStriker.id : p.name.trim().toLowerCase() !== leadStriker.name.trim().toLowerCase()));
+
+  let primaryWinger = candidatePrimaryWinger || {
+    id: 'w-1',
+    name: leadStriker.name.includes('Gabriel') ? 'Amir Zalani' : 'Gabriel Quak',
+    number: leadStriker.number === 77 ? 21 : 77,
+    preferredFoot: 'Left'
+  };
+
+  if (primaryWinger.name.trim().toLowerCase() === leadStriker.name.trim().toLowerCase()) {
+    const alternativeWinger = allSquadFwds.find(p => p.name.trim().toLowerCase() !== leadStriker.name.trim().toLowerCase());
+    primaryWinger = alternativeWinger || {
+      id: 'w-fallback',
+      name: leadStriker.name.includes('Gabriel') ? 'Amir Zalani' : 'Gabriel Quak',
+      number: leadStriker.number === 77 ? 21 : 77,
+      preferredFoot: 'Left'
+    };
+  }
+
+  // Rival Key Players - audit and validate positions (Geylang #9 Ryoya Taniguchi duplicate protection)
   const rivalSquad = opponent.players || [];
-  const rivalStriker = rivalSquad.find(p => p.position === 'FWD') || { name: `${opponent.shortName} Leading Striker`, number: 9 };
-  const rivalMid = rivalSquad.find(p => p.position === 'MID') || { name: `${opponent.shortName} Central Pivot`, number: 8 };
-  const rivalCB = rivalSquad.find(p => p.position === 'DEF') || { name: `${opponent.shortName} Center-Back`, number: 4 };
-  const rivalStrikerId = 'id' in rivalStriker ? rivalStriker.id : undefined;
-  const rivalWinger = rivalSquad.find(p => p.position === 'FWD' && (rivalStrikerId ? p.id !== rivalStrikerId : true)) || { name: `${opponent.shortName} Wide Threat`, number: 7 };
+  
+  // 1. Rival Striker: primary forward / #9
+  const rivalStriker = 
+    rivalSquad.find(p => p.position === 'FWD' && (p.number === 9 || p.role?.toUpperCase().includes('S') || p.role?.toUpperCase().includes('CF') || p.role?.toUpperCase().includes('ST'))) ||
+    rivalSquad.find(p => p.position === 'FWD') || 
+    { name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Leading Striker`, number: 9 };
+
+  // 2. Rival Winger: wide attacker or wide midfielder - MUST NEVER BE rivalStriker (never duplicate #9!)
+  const candidateRivalWinger = 
+    rivalSquad.find(p => 
+      (p.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
+      p.number !== rivalStriker.number &&
+      (p.role?.toUpperCase().includes('W') || p.role?.toUpperCase().includes('LM') || p.role?.toUpperCase().includes('RM') || p.role?.toUpperCase().includes('LAM') || p.role?.toUpperCase().includes('RAM') || p.position === 'FWD')
+    ) ||
+    rivalSquad.find(p => 
+      (p.id ? p.id !== rivalStriker.id : p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase()) &&
+      p.number !== rivalStriker.number &&
+      p.position !== 'GK' && p.position !== 'DEF'
+    );
+
+  let rivalWinger = candidateRivalWinger || { 
+    name: opponent.id === 'opp-geylang' ? 'Iqbal Hussain' : `${opponent.shortName} Wide Threat`, 
+    number: opponent.id === 'opp-geylang' ? 11 : 7 
+  };
+
+  // Fail-safe duplicate protection for rival winger vs rival striker
+  if (rivalWinger.name.trim().toLowerCase() === rivalStriker.name.trim().toLowerCase() || rivalWinger.number === rivalStriker.number) {
+    const alternativeRival = rivalSquad.find(p => 
+      p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && 
+      p.number !== rivalStriker.number &&
+      p.position !== 'GK'
+    );
+    rivalWinger = alternativeRival || { 
+      name: opponent.id === 'opp-geylang' ? 'Iqbal Hussain' : `${opponent.shortName} Wide Winger`, 
+      number: opponent.id === 'opp-geylang' ? 11 : 7 
+    };
+  }
+
+  // 3. Rival Midfielder: central playmaker or pivot - distinct from striker & winger
+  const rivalMid = 
+    rivalSquad.find(p => 
+      (p.id ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
+      p.number !== rivalStriker.number &&
+      p.number !== rivalWinger.number &&
+      p.position === 'MID' && 
+      (p.role?.toUpperCase().includes('CM') || p.role?.toUpperCase().includes('DM') || p.role?.toUpperCase().includes('CAM') || p.number === 10 || p.number === 8 || p.number === 6)
+    ) ||
+    rivalSquad.find(p => 
+      (p.id ? (p.id !== rivalStriker.id && p.id !== rivalWinger.id) : (p.name.trim().toLowerCase() !== rivalStriker.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== rivalWinger.name.trim().toLowerCase())) &&
+      p.position === 'MID'
+    ) ||
+    { name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Central Pivot`, number: 10 };
+
+  // 4. Rival Central Defender
+  const rivalCB = 
+    rivalSquad.find(p => 
+      p.position === 'DEF' && 
+      (p.role?.toUpperCase().includes('CB') || p.role?.toUpperCase().includes('CD') || p.role?.toUpperCase().includes('RCB') || p.role?.toUpperCase().includes('LCB') || p.number === 3 || p.number === 4)
+    ) ||
+    rivalSquad.find(p => p.position === 'DEF') || 
+    { name: opponent.id === 'opp-geylang' ? 'Rio Sakuma' : `${opponent.shortName} Center-Back`, number: 3 };
 
   // User SWOT observations
   const ourStr = cleanText(swot.ourStrengths);
@@ -462,17 +617,83 @@ export function generateTacticalInsights(
   const clusters = extractPlayerClusters(players);
   const { goalkeeper, centralDefenders, fullbacks, midfieldPivots, wingers, strikers, invertedPlayers } = clusters;
 
-  const leadCB = centralDefenders[0] || { name: 'Central Defender', number: 4 };
-  const leadFB = fullbacks[0] || { name: 'Fullback', number: 2 };
-  const starPlaymaker = clusters.attackingMidfielders[0] || midfieldPivots[0] || { name: 'Central Playmaker', number: 10 };
-  const starForward = strikers[0] || { name: 'Leading Striker', number: 9 };
-  const primaryWinger = wingers[0] || { name: 'Winger', number: 11 };
+  const allActiveDefenders = clusters.allActive.filter(p => p.position === 'DEF');
+  const allActiveMids = clusters.allActive.filter(p => p.position === 'MID');
+  const allActiveFwds = clusters.allActive.filter(p => p.position === 'FWD');
+  const allSquadFwds = (players || []).filter(p => p.position === 'FWD');
+  const allSquadMids = (players || []).filter(p => p.position === 'MID');
+
+  const leadCB = centralDefenders[0] || allActiveDefenders[0] || { name: 'Central Defender', number: 4 };
+  const leadFB = fullbacks[0] || allActiveDefenders.find(p => p.id !== leadCB.id) || { name: 'Fullback', number: 2 };
+
+  // Star Forward (striker):
+  const starForward = 
+    strikers[0] || 
+    allActiveFwds.find(p => !p.roleLabel?.toUpperCase().includes('W')) ||
+    allActiveFwds[0] || 
+    allSquadFwds[0] || 
+    { name: 'Sahil Suhaimi', number: 32 };
+
+  // Primary Winger: MUST BE STRICTLY DISTINCT FROM starForward (no duplicate Sahil Suhaimi)
+  const candidateWinger = 
+    wingers.find(p => (p.id ? p.id !== starForward.id : p.name.trim().toLowerCase() !== starForward.name.trim().toLowerCase())) ||
+    allActiveFwds.find(p => (p.id ? p.id !== starForward.id : p.name.trim().toLowerCase() !== starForward.name.trim().toLowerCase())) ||
+    allActiveMids.find(p => (p.id ? p.id !== starForward.id : p.name.trim().toLowerCase() !== starForward.name.trim().toLowerCase()) && (p.roleLabel?.toUpperCase().includes('W') || p.roleLabel?.toUpperCase().includes('M') || (p.pitchX !== undefined && (p.pitchX <= 32 || p.pitchX >= 68)))) ||
+    allSquadFwds.find(p => (p.id ? p.id !== starForward.id : p.name.trim().toLowerCase() !== starForward.name.trim().toLowerCase()));
+
+  let primaryWinger = candidateWinger || {
+    name: starForward.name.includes('Gabriel') ? 'Amir Zalani' : 'Gabriel Quak',
+    number: starForward.number === 77 ? 21 : 77
+  };
+
+  if (primaryWinger.name.trim().toLowerCase() === starForward.name.trim().toLowerCase()) {
+    const altWinger = allSquadFwds.find(p => p.name.trim().toLowerCase() !== starForward.name.trim().toLowerCase());
+    primaryWinger = altWinger || {
+      name: starForward.name.includes('Gabriel') ? 'Amir Zalani' : 'Gabriel Quak',
+      number: starForward.number === 77 ? 21 : 77
+    };
+  }
+
+  // Star Playmaker (midfield):
+  const starPlaymaker = 
+    clusters.attackingMidfielders[0] || 
+    midfieldPivots.find(p => p.id !== leadCB.id && p.id !== leadFB.id) || 
+    allActiveMids[0] || 
+    allSquadMids[0] || 
+    { name: 'Central Playmaker', number: 10 };
 
   // Rival active players
   const rivalSquad = opponent.players || [];
-  const rivalKeyAttacker = rivalSquad.find(p => p.position === 'FWD') || rivalSquad[10] || { name: `${opponent.shortName} Striker`, number: 9 };
-  const rivalMidfielder = rivalSquad.find(p => p.position === 'MID') || rivalSquad[7] || { name: `${opponent.shortName} Playmaker`, number: 10 };
-  const rivalDefender = rivalSquad.find(p => p.position === 'DEF') || rivalSquad[3] || { name: `${opponent.shortName} Defender`, number: 4 };
+  
+  // Rival Key Attacker (e.g. Geylang #9 Ryoya Taniguchi)
+  const rivalKeyAttacker = 
+    rivalSquad.find(p => p.position === 'FWD' && (p.number === 9 || p.role?.toUpperCase().includes('S') || p.role?.toUpperCase().includes('CF') || p.role?.toUpperCase().includes('ST'))) ||
+    rivalSquad.find(p => p.position === 'FWD') || 
+    { name: opponent.id === 'opp-geylang' ? 'Ryoya Taniguchi' : `${opponent.shortName} Striker`, number: 9 };
+
+  // Rival Midfielder: distinct from rivalKeyAttacker
+  const rivalMidfielder = 
+    rivalSquad.find(p => 
+      (p.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
+      p.number !== rivalKeyAttacker.number &&
+      p.position === 'MID' && 
+      (p.role?.toUpperCase().includes('CM') || p.role?.toUpperCase().includes('CAM') || p.role?.toUpperCase().includes('DM') || p.number === 10 || p.number === 8)
+    ) ||
+    rivalSquad.find(p => 
+      (p.id ? p.id !== rivalKeyAttacker.id : p.name.trim().toLowerCase() !== rivalKeyAttacker.name.trim().toLowerCase()) &&
+      p.number !== rivalKeyAttacker.number &&
+      p.position === 'MID'
+    ) ||
+    { name: opponent.id === 'opp-geylang' ? 'Vincent Bezecourt' : `${opponent.shortName} Playmaker`, number: 10 };
+
+  // Rival Defender: central defender distinct from attackers
+  const rivalDefender = 
+    rivalSquad.find(p => 
+      p.position === 'DEF' && 
+      (p.role?.toUpperCase().includes('CB') || p.role?.toUpperCase().includes('CD') || p.role?.toUpperCase().includes('RCB') || p.role?.toUpperCase().includes('LCB') || p.number === 3 || p.number === 4)
+    ) ||
+    rivalSquad.find(p => p.position === 'DEF') || 
+    { name: opponent.id === 'opp-geylang' ? 'Rio Sakuma' : `${opponent.shortName} Defender`, number: 3 };
 
   const hName = hgufcFormation.name;
   const rName = rivalFormation.name;

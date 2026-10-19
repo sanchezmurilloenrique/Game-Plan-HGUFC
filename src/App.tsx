@@ -69,7 +69,15 @@ export default function App() {
   const [players, setPlayers] = useState<Player[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_PLAYERS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: Player[] = JSON.parse(saved);
+        return parsed.map(p => {
+          if (p.name.trim().toLowerCase() === 'sahil suhaimi' && p.number === 13) {
+            return { ...p, number: 32 };
+          }
+          return p;
+        });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -91,7 +99,19 @@ export default function App() {
   const [opponents, setOpponents] = useState<OpponentTeam[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_OPPONENTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: OpponentTeam[] = JSON.parse(saved);
+        return parsed.map(opp => {
+          if (opp.id === 'opp-geylang') {
+            return {
+              ...opp,
+              keyPlayers: opp.keyPlayers.map(k => k === 'Tomoya Taniguchi' ? 'Ryoya Taniguchi' : k),
+              players: opp.players?.map(p => p.number === 9 ? { ...p, name: 'Ryoya Taniguchi' } : p)
+            };
+          }
+          return opp;
+        });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -463,30 +483,60 @@ export default function App() {
 
     setMatchPlan(prev => ({ ...prev, hgufcFormationId: formationId }));
     
-    // Smoothly shift on-pitch players to the new positions
+    // Smoothly shift on-pitch players to the new positions respecting player positions
     setPlayers(prev => {
       const onPitch = prev.filter(p => p.pitchX !== undefined && p.pitchY !== undefined);
       if (onPitch.length === 0) return prev;
 
       const updated = prev.map(p => ({ ...p }));
+      const assignedIds = new Set<string>();
       
-      // Separate GK and outfields
+      // 1. Separate GK
       const gkPlayer = updated.find(p => p.position === 'GK' && p.pitchX !== undefined);
       const gkSlot = nextFormation.positions.find(slot => slot.position === 'GK');
       if (gkPlayer && gkSlot) {
         gkPlayer.pitchX = gkSlot.x;
         gkPlayer.pitchY = gkSlot.y;
         gkPlayer.roleLabel = gkSlot.role;
+        assignedIds.add(gkPlayer.id);
       }
 
       const outfieldPlayers = updated.filter(p => p.position !== 'GK' && p.pitchX !== undefined);
       const outfieldSlots = nextFormation.positions.filter(slot => slot.position !== 'GK');
+      const occupiedSlotCoords = new Set<string>();
 
-      outfieldPlayers.forEach((p, idx) => {
-        if (outfieldSlots[idx]) {
-          p.pitchX = outfieldSlots[idx].x;
-          p.pitchY = outfieldSlots[idx].y;
-          p.roleLabel = outfieldSlots[idx].role;
+      // 2. Position-aware slot matching: DEF -> DEF slots, MID -> MID slots, FWD -> FWD slots
+      (['DEF', 'MID', 'FWD'] as const).forEach(posCategory => {
+        const matchingPlayers = outfieldPlayers
+          .filter(p => p.position === posCategory && !assignedIds.has(p.id))
+          .sort((a, b) => (a.pitchX ?? 50) - (b.pitchX ?? 50));
+
+        const matchingSlots = outfieldSlots
+          .filter(s => s.position === posCategory && !occupiedSlotCoords.has(`${s.x},${s.y}`))
+          .sort((a, b) => a.x - b.x);
+
+        matchingPlayers.forEach((player, idx) => {
+          if (matchingSlots[idx]) {
+            player.pitchX = matchingSlots[idx].x;
+            player.pitchY = matchingSlots[idx].y;
+            player.roleLabel = matchingSlots[idx].role;
+            assignedIds.add(player.id);
+            occupiedSlotCoords.add(`${matchingSlots[idx].x},${matchingSlots[idx].y}`);
+          }
+        });
+      });
+
+      // 3. Fallback pass for any remaining players into unfilled slots
+      const unassigned = outfieldPlayers.filter(p => !assignedIds.has(p.id));
+      const remainingSlots = outfieldSlots.filter(s => !occupiedSlotCoords.has(`${s.x},${s.y}`));
+
+      unassigned.forEach((player, idx) => {
+        if (remainingSlots[idx]) {
+          player.pitchX = remainingSlots[idx].x;
+          player.pitchY = remainingSlots[idx].y;
+          player.roleLabel = remainingSlots[idx].role;
+          assignedIds.add(player.id);
+          occupiedSlotCoords.add(`${remainingSlots[idx].x},${remainingSlots[idx].y}`);
         }
       });
 
@@ -496,28 +546,34 @@ export default function App() {
     showToast(`Formation shifted to ${nextFormation.name}`, 'info');
   };
 
-  // Place single player on pitch
+  // Place single player on pitch with position-matching slot selection
   const handlePlacePlayerOnPitch = (player: Player) => {
-    // Find first vacant slot in current formation or place in center
-    const onPitchCount = players.filter(p => p.pitchX !== undefined && p.pitchY !== undefined).length;
-    if (onPitchCount >= 11) {
+    const onPitchList = players.filter(p => p.pitchX !== undefined && p.pitchY !== undefined);
+    if (onPitchList.length >= 11) {
       showToast('Maximum 11 players on pitch. Bench a player first.', 'error');
       return;
     }
 
+    const occupiedCoords = new Set(onPitchList.map(p => `${p.pitchX},${p.pitchY}`));
+
+    // Find first vacant slot matching player's position (GK, DEF, MID, FWD)
+    const matchingVacantSlot = 
+      currentHgufcFormation.positions.find(slot => slot.position === player.position && !occupiedCoords.has(`${slot.x},${slot.y}`)) ||
+      currentHgufcFormation.positions.find(slot => !occupiedCoords.has(`${slot.x},${slot.y}`)) ||
+      { x: 50, y: 50, role: player.position };
+
     setPlayers(prev => prev.map(p => {
       if (p.id === player.id) {
-        const defaultSlot = currentHgufcFormation.positions[onPitchCount] || { x: 50, y: 50, role: player.position };
         return {
           ...p,
-          pitchX: defaultSlot.x,
-          pitchY: defaultSlot.y,
-          roleLabel: defaultSlot.role,
+          pitchX: matchingVacantSlot.x,
+          pitchY: matchingVacantSlot.y,
+          roleLabel: matchingVacantSlot.role,
         };
       }
       return p;
     }));
-    showToast(`${player.name} deployed onto pitch`, 'success');
+    showToast(`${player.name} deployed onto pitch as ${matchingVacantSlot.role}`, 'success');
   };
 
   // Remove single player from pitch
