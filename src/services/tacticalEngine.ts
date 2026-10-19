@@ -43,8 +43,23 @@ export function extractPlayerClusters(players: Player[] = []): PlayerCluster {
     players.find(p => p.position === 'GK') || 
     { id: 'gk-def', name: 'Zulfairuuz Rudy', number: 1, position: 'GK', preferredFoot: 'Right' };
 
-  const centralDefenders = active.filter(p => p.position === 'DEF' && (p.roleLabel?.includes('CB') || (p.pitchX !== undefined && p.pitchX > 30 && p.pitchX < 70)));
-  const fullbacks = active.filter(p => p.position === 'DEF' && (p.roleLabel?.includes('B') || p.roleLabel?.includes('WB') || (p.pitchX !== undefined && (p.pitchX <= 30 || p.pitchX >= 70))));
+  const allActiveDefenders = active.filter(p => p.position === 'DEF');
+
+  // Match CB by roleLabel or central pitch corridor (26% to 74% width)
+  const centralDefenders = allActiveDefenders.filter(p => {
+    const role = (p.roleLabel || '').toUpperCase();
+    if (role.includes('CB') || role.includes('CD') || role.includes('SW') || role.includes('CENT') || role.includes('LIB')) return true;
+    if (role.includes('WB') || role === 'LB' || role === 'RB') return false;
+    return p.pitchX !== undefined && p.pitchX >= 26 && p.pitchX <= 74;
+  });
+
+  const fullbacks = allActiveDefenders.filter(p => {
+    const role = (p.roleLabel || '').toUpperCase();
+    if (role.includes('WB') || role === 'LB' || role === 'RB' || role.includes('FULL') || role.includes('WING')) return true;
+    if (role.includes('CB') || role.includes('CD') || role.includes('SW')) return false;
+    return p.pitchX !== undefined && (p.pitchX < 26 || p.pitchX > 74);
+  });
+
   const midfieldPivots = active.filter(p => p.position === 'MID' && (p.roleLabel?.includes('DM') || p.roleLabel?.includes('Pivot') || p.roleLabel?.includes('CM')));
   const attackingMidfielders = active.filter(p => p.position === 'MID' && (p.roleLabel?.includes('AM') || p.roleLabel?.includes('10')));
   const wingers = active.filter(p => p.position === 'FWD' && (p.roleLabel?.includes('W') || (p.pitchX !== undefined && (p.pitchX <= 30 || p.pitchX >= 70))));
@@ -63,8 +78,8 @@ export function extractPlayerClusters(players: Player[] = []): PlayerCluster {
 
   return {
     goalkeeper,
-    centralDefenders: centralDefenders.length > 0 ? centralDefenders : active.filter(p => p.position === 'DEF').slice(0, 2),
-    fullbacks: fullbacks.length > 0 ? fullbacks : active.filter(p => p.position === 'DEF').slice(2, 4),
+    centralDefenders: centralDefenders.length > 0 ? centralDefenders : allActiveDefenders.slice(0, 2),
+    fullbacks: fullbacks.length > 0 ? fullbacks : allActiveDefenders.slice(2, 4),
     midfieldPivots: midfieldPivots.length > 0 ? midfieldPivots : active.filter(p => p.position === 'MID').slice(0, 2),
     attackingMidfielders: attackingMidfielders.length > 0 ? attackingMidfielders : active.filter(p => p.position === 'MID').slice(1, 2),
     wingers: wingers.length > 0 ? wingers : active.filter(p => p.position === 'FWD').slice(1, 3),
@@ -87,11 +102,66 @@ export function generateMultidimensionalReport(
   const clusters = extractPlayerClusters(players);
   const { goalkeeper, centralDefenders, fullbacks, midfieldPivots, wingers, strikers, invertedPlayers } = clusters;
 
-  // Key Player References
-  const leadCB = centralDefenders[0] || { name: 'Lead Center-Back', number: 4, preferredFoot: 'Right' };
-  const secondCB = centralDefenders[1] || centralDefenders[0] || { name: 'Covering Center-Back', number: 5, preferredFoot: 'Right' };
-  const leadFB = fullbacks[0] || { name: 'Active Fullback', number: 2, preferredFoot: 'Right' };
-  const oppositeFB = fullbacks[1] || fullbacks[0] || { name: 'Opposite Fullback', number: 3, preferredFoot: 'Left' };
+  const allActiveDefenders = clusters.allActive.filter(p => p.position === 'DEF');
+  const allSquadDefenders = players.filter(p => p.position === 'DEF');
+
+  // Key Player References - strictly unique pairs
+  const leadCB = centralDefenders[0] || allActiveDefenders[0] || allSquadDefenders[0] || { id: 'cb-1', name: 'Lead Center-Back', number: 4, preferredFoot: 'Right' };
+
+  // secondCB must ALWAYS be distinct from leadCB (never duplicate the same player)
+  const candidateSecondCB = 
+    centralDefenders.find(p => (p.id ? p.id !== leadCB.id : p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase())) ||
+    allActiveDefenders.find(p => (p.id ? p.id !== leadCB.id : p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase()) && !fullbacks.slice(0, 2).some(fb => fb.id === p.id)) ||
+    allActiveDefenders.find(p => (p.id ? p.id !== leadCB.id : p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase())) ||
+    allSquadDefenders.find(p => (p.id ? p.id !== leadCB.id : p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase()));
+
+  let secondCB = candidateSecondCB || { 
+    id: 'cb-2-fallback', 
+    name: leadCB.name.includes('Aplin') ? 'Kazuma Takayama' : 'Anders Aplin', 
+    number: leadCB.number === 5 ? 6 : 5, 
+    preferredFoot: 'Right' 
+  };
+
+  // Fail-safe duplicate protection: if names match, force a distinct defender
+  if (secondCB.name.trim().toLowerCase() === leadCB.name.trim().toLowerCase()) {
+    const alternativeDef = allSquadDefenders.find(p => p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase());
+    secondCB = alternativeDef || { 
+      id: 'cb-2-fallback', 
+      name: leadCB.name.includes('Aplin') ? 'Kazuma Takayama' : 'Anders Aplin', 
+      number: leadCB.number === 5 ? 6 : 5, 
+      preferredFoot: 'Right' 
+    };
+  }
+
+  // Fullback References - strictly unique pair and distinct from central defenders
+  const leadFB = fullbacks[0] || allActiveDefenders.find(p => p.id !== leadCB.id && p.id !== secondCB.id) || allSquadDefenders.find(p => p.id !== leadCB.id && p.id !== secondCB.id) || { id: 'fb-1', name: 'Active Fullback', number: 2, preferredFoot: 'Right' };
+
+  const candidateOppositeFB = 
+    fullbacks.find(p => (p.id ? (p.id !== leadFB.id && p.id !== leadCB.id && p.id !== secondCB.id) : (p.name.trim().toLowerCase() !== leadFB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== secondCB.name.trim().toLowerCase()))) ||
+    allActiveDefenders.find(p => (p.id ? (p.id !== leadFB.id && p.id !== leadCB.id && p.id !== secondCB.id) : (p.name.trim().toLowerCase() !== leadFB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== secondCB.name.trim().toLowerCase()))) ||
+    allSquadDefenders.find(p => (p.id ? (p.id !== leadFB.id && p.id !== leadCB.id && p.id !== secondCB.id) : (p.name.trim().toLowerCase() !== leadFB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase() && p.name.trim().toLowerCase() !== secondCB.name.trim().toLowerCase())));
+
+  let oppositeFB = candidateOppositeFB || { 
+    id: 'fb-2-fallback', 
+    name: leadFB.name.includes('Nazrul') ? 'Farhan Zulkifli' : 'Nazrul Nazari', 
+    number: leadFB.number === 4 ? 3 : 4, 
+    preferredFoot: 'Left' 
+  };
+
+  if (oppositeFB.name.trim().toLowerCase() === leadFB.name.trim().toLowerCase()) {
+    const alternativeFB = allSquadDefenders.find(p => 
+      p.name.trim().toLowerCase() !== leadFB.name.trim().toLowerCase() && 
+      p.name.trim().toLowerCase() !== leadCB.name.trim().toLowerCase() && 
+      p.name.trim().toLowerCase() !== secondCB.name.trim().toLowerCase()
+    );
+    oppositeFB = alternativeFB || { 
+      id: 'fb-2-fallback', 
+      name: leadFB.name.includes('Nazrul') ? 'Farhan Zulkifli' : 'Nazrul Nazari', 
+      number: leadFB.number === 4 ? 3 : 4, 
+      preferredFoot: 'Left' 
+    };
+  }
+
   const leadPivot = midfieldPivots[0] || { name: 'Holding Midfielder', number: 6, preferredFoot: 'Right' };
   const creativeMid = clusters.attackingMidfielders[0] || midfieldPivots[1] || { name: 'Creative Midfielder', number: 10, preferredFoot: 'Right' };
   const leadStriker = strikers[0] || { name: 'Main Striker', number: 9, preferredFoot: 'Right' };
